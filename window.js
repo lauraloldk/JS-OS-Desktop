@@ -6,6 +6,7 @@ window.createWindow = function(title, url) {
         <div class="window-header">
             <span class="window-title">${title}</span>
             <button class="window-close">X</button>
+            <button class="window-save">Save</button>
         </div>
         <iframe class="window-content" src="${url}"></iframe>
     `;
@@ -45,11 +46,8 @@ window.createWindow = function(title, url) {
         canvas.removeChild(windowDiv);
     });
 
+    
+    
+
     canvas.appendChild(windowDiv);
 }
-
-
-
-
-
-

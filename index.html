@@ -26,19 +26,28 @@
             height: 100%; /* Set the height of the start button to 100% of its parent (taskbar) */
         }
 
+        #appPicker {
+            height: 100%;
+            margin-right: 10px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+
         .window {
-    position: absolute;
-    /* Resten af dine stilarter... */
-}
+            position: absolute;
+            /* Resten af dine stilarter... */
+        }
 
     </style>
     
     <script src="window.js"></script>
+</head>
 <body>
     <div id="canvas"></div>
 
-    
     <div id="taskbar">
+        <input type="text" id="appPicker" placeholder="App-picker">
         <button id="startButton">Run App</button>
         <span id="clock"></span>
     </div>
@@ -73,16 +82,21 @@
                 console.error('Error:', error);
             });
 
-        // Add click event listener to the startButton
-        const startButton = document.getElementById('startButton');
-        startButton.addEventListener('click', function() {
-            createWindow("Run Command", "run.html"); // Call the createWindow() function from window.js
-        });
+         // Add click event listener to the startButton
+    const startButton = document.getElementById('startButton');
+    startButton.addEventListener('click', function() {
+        const appPicker = document.getElementById('appPicker');
+        console.log(appPicker.value);
+        createWindow(appPicker.value, "apps/" + appPicker.value + "/index.html"); // Call the createWindow() function from window.js
+    });
 
-    
     </script>
 </body>
 </html>
+<script>
+
+
+
 
 
 
