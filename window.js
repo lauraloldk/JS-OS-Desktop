@@ -6,7 +6,7 @@ window.createWindow = function(title, url) {
         <div class="window-header">
             <span class="window-title">${title}</span>
             <button class="window-close">X</button>
-            <button class="window-save">Save</button>
+            
         </div>
         <iframe class="window-content" src="${url}"></iframe>
     `;
@@ -46,8 +46,10 @@ window.createWindow = function(title, url) {
         canvas.removeChild(windowDiv);
     });
 
-    
-    
+    // Change background color of iframe to white
+    const windowContent = windowDiv.querySelector('.window-content');
+    windowContent.style.backgroundColor = 'grey';
 
     canvas.appendChild(windowDiv);
 }
+
