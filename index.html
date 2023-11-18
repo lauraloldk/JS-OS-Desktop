@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JS OS Desktop</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        
+        #canvas {
+            width: 100%;
+            height: calc(100vh - 50px); /* Subtract the height of the taskbar from the viewport height */
+            background-color: #f2f2f2;
+        }
+
+        #taskbar {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            height: 50px;
+            background-color: #f2f2f2;
+        }
+
+        #startButton {
+            height: 100%; /* Set the height of the start button to 100% of its parent (taskbar) */
+        }
+
+        .window {
+    position: absolute;
+    /* Resten af dine stilarter... */
+}
+
+    </style>
+    
+    <script src="window.js"></script>
+<body>
+    <div id="canvas"></div>
+
+    
+    <div id="taskbar">
+        <button id="startButton">Run App</button>
+        <span id="clock"></span>
+    </div>
+
+    <script>
+        // Load the JSON data from os-settings.json
+        fetch('data/os-settings.json')
+            .then(response => response.json())
+            .then(data => {
+                // Access the value of "desktopcolor"
+                const desktopColor = data.desktopcolor;
+
+                // Set the background-color of #canvas
+                const canvas = document.getElementById('canvas');
+                canvas.style.backgroundColor = desktopColor;
+            });
+
+        // Load the JSON file
+        fetch('data/os-settings.json')
+            .then(response => response.json())
+            .then(data => {
+                // Extract the value of "taskbarcolor"
+                const taskbarColor = data.taskbarcolor;
+
+                // Select the "taskbar" div
+                const taskbarDiv = document.getElementById('taskbar');
+
+                // Set the background color of the "taskbar" div
+                taskbarDiv.style.backgroundColor = taskbarColor;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+
+        // Add click event listener to the startButton
+        const startButton = document.getElementById('startButton');
+        startButton.addEventListener('click', function() {
+            createWindow("Run Command", "run.html"); // Call the createWindow() function from window.js
+        });
+
+    
+    </script>
+</body>
+</html>
+
+
+
+

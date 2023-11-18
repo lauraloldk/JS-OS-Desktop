@@ -1,0 +1,15 @@
+<!-- Add a textbox and a button -->
+<input type="text" id="appName" placeholder="Enter app name">
+<button onclick="runApp()">Run</button>
+
+<script src="window.js"></script>
+<script>
+    function runApp() {
+        // Get the textbox input
+        var appName = document.getElementById("appName").value;
+
+        // Call the createWindow() function with the textbox input as the first argument
+        // and "/apps/{textbox input}/index.html" as the second argument
+        createWindow(appName, `/apps/${appName}/index.html`);
+    }
+</script>
