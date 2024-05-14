@@ -6,9 +6,10 @@ window.createWindow = function(title, url) {
         <div class="window-header">
             <span class="window-title">${title}</span>
             <button class="window-close">X</button>
-            
+            <button class="help">help</button>
         </div>
         <iframe class="window-content" src="${url}"></iframe>
+        
     `;
 
     // Add drag event to window title
@@ -44,6 +45,16 @@ window.createWindow = function(title, url) {
     const windowCloseButton = windowDiv.querySelector('.window-close');
     windowCloseButton.addEventListener('click', function() {
         canvas.removeChild(windowDiv);
+    });
+    
+    // hide help button if there is no help.html file in the same directory as the file using the "url" parameter
+    
+
+
+    const helpButton = windowDiv.querySelector('.help');
+    helpButton.addEventListener('click', function() {
+        const helpUrl = url.replace(/\/[^/]*$/, '/help.html');
+        createWindow('Help', helpUrl);
     });
 
     // Change background color of iframe to white
