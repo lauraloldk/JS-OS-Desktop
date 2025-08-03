@@ -20,23 +20,117 @@
             width: 100%;
             height: 50px;
             background-color: #f2f2f2;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+            box-sizing: border-box;
         }
 
-        #startButton {
-            height: 100%; /* Set the height of the start button to 100% of its parent (taskbar) */
+        #startButton, #settingsButton {
+            height: 36px;
+            margin-right: 10px;
+            padding: 0 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #fff;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        #startButton:hover, #settingsButton:hover {
+            background-color: #f0f0f0;
         }
 
         #appPicker {
-            height: 100%;
+            height: 36px;
             margin-right: 10px;
-            padding: 5px;
+            padding: 0 10px;
             border: 1px solid #ccc;
-            border-radius: 3px;
+            border-radius: 4px;
+            flex-grow: 1;
+            max-width: 180px;
+        }
+        
+        #clock {
+            margin-left: auto;
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+            padding: 0 10px;
+            white-space: nowrap;
+            min-width: 60px;
         }
 
         .window {
             position: absolute;
-            /* Resten af dine stilarter... */
+            width: 600px;
+            height: 400px;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            top: 50px;
+            left: 50px;
+            overflow: hidden;
+        }
+        
+        .window-header {
+            height: 30px;
+            background-color: #f0f0f0;
+            border-bottom: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            cursor: move;
+            user-select: none;
+        }
+        
+        .window-title {
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .window-controls {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .window-close, .help {
+            width: 20px;
+            height: 20px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .window-close {
+            background-color: #ff5f57;
+            color: white;
+        }
+        
+        .help {
+            background-color: #007acc;
+            color: white;
+        }
+        
+        .window-close:hover {
+            background-color: #ff3b30;
+        }
+        
+        .help:hover {
+            background-color: #005a9e;
+        }
+        
+        .window-content {
+            width: 100%;
+            height: calc(100% - 31px);
+            border: none;
         }
 
     </style>
@@ -49,6 +143,7 @@
     <div id="taskbar">
         <input type="text" id="appPicker" placeholder="App-picker">
         <button id="startButton">Run App</button>
+        <button id="settingsButton">Settings</button>
         <span id="clock"></span>
     </div>
 
@@ -89,6 +184,26 @@
         console.log(appPicker.value);
         createWindow(appPicker.value, "apps/" + appPicker.value + "/index.html"); // Call the createWindow() function from window.js
     });
+
+    // Add click event listener to the settingsButton
+    const settingsButton = document.getElementById('settingsButton');
+    settingsButton.addEventListener('click', function() {
+        createWindow("Settings", "settings/index.html");
+    });
+
+    // Update clock
+    function updateClock() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('da-DK', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        document.getElementById('clock').textContent = timeString;
+    }
+    
+    // Update clock immediately and then every second
+    updateClock();
+    setInterval(updateClock, 1000);
 
     </script>
 </body>

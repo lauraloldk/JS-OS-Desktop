@@ -5,18 +5,24 @@ window.createWindow = function(title, url) {
     windowDiv.innerHTML = `
         <div class="window-header">
             <span class="window-title">${title}</span>
-            <button class="window-close">X</button>
-            <button class="help">help</button>
+            <div class="window-controls">
+                <button class="help" title="Help">?</button>
+                <button class="window-close" title="Close">×</button>
+            </div>
         </div>
         <iframe class="window-content" src="${url}"></iframe>
-        
     `;
 
-    // Add drag event to window title
-    const windowTitle = windowDiv.querySelector('.window-title');
+    // Add drag event to window header
+    const windowHeader = windowDiv.querySelector('.window-header');
     let initialMouseX, initialMouseY, initialWindowX, initialWindowY;
 
-    windowTitle.addEventListener('mousedown', function(event) {
+    windowHeader.addEventListener('mousedown', function(event) {
+        // Don't drag if clicking on buttons
+        if (event.target.tagName === 'BUTTON') {
+            return;
+        }
+        
         initialMouseX = event.clientX;
         initialMouseY = event.clientY;
         const windowRect = windowDiv.getBoundingClientRect();
@@ -25,6 +31,9 @@ window.createWindow = function(title, url) {
 
         window.addEventListener('mousemove', handleMouseMove);
         window.addEventListener('mouseup', handleMouseUp);
+        
+        // Prevent text selection while dragging
+        event.preventDefault();
     });
 
     function handleMouseMove(event) {
