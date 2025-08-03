@@ -1,1 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Settings</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .settings-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .settings-section {
+            background: white;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .section-header {
+            background: #e0e0e0;
+            padding: 15px 20px;
+            border-radius: 8px 8px 0 0;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        
+        .section-content {
+            padding: 20px;
+        }
+        
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .setting-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        .setting-label {
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .color-input-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .color-input {
+            width: 50px;
+            height: 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .color-value {
+            font-family: monospace;
+            font-size: 12px;
+            color: #666;
+            min-width: 60px;
+        }
+        
+        .apply-button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        
+        .apply-button:hover {
+            background: #005a9e;
+        }
+        
+        .status-message {
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="settings-container">
+        <h1>System Settings</h1>
+        
+        <div class="settings-section">
+            <div class="section-header">
+                Appearance
+            </div>
+            <div class="section-content">
+                <div class="setting-item">
+                    <span class="setting-label">Desktop Color:</span>
+                    <div class="color-input-container">
+                        <input type="color" id="desktopColorPicker" class="color-input" value="#0000ff">
+                        <span id="desktopColorValue" class="color-value">#0000ff</span>
+                    </div>
+                </div>
+                
+                <div class="setting-item">
+                    <span class="setting-label">Taskbar Color:</span>
+                    <div class="color-input-container">
+                        <input type="color" id="taskbarColorPicker" class="color-input" value="#808080">
+                        <span id="taskbarColorValue" class="color-value">#808080</span>
+                    </div>
+                </div>
+                
+                <button class="apply-button" onclick="applyColorSettings()">Apply Changes</button>
+                <button class="apply-button" onclick="openAdvancedColors()" style="background: #6c757d; margin-left: 10px;">Advanced Colors</button>
+                
+                <div id="statusMessage" class="status-message"></div>
+            </div>
+        </div>
+    </div>
 
+    <script>
+        // Load current settings when page loads
+        async function loadCurrentSettings() {
+            try {
+                const response = await fetch('../data/os-settings.json');
+                const data = await response.json();
+                
+                // Convert color names to hex if needed
+                const desktopColor = convertColorToHex(data.desktopcolor);
+                const taskbarColor = convertColorToHex(data.taskbarcolor);
+                
+                // Update color pickers
+                document.getElementById('desktopColorPicker').value = desktopColor;
+                document.getElementById('taskbarColorPicker').value = taskbarColor;
+                
+                // Update color value displays
+                document.getElementById('desktopColorValue').textContent = desktopColor;
+                document.getElementById('taskbarColorValue').textContent = taskbarColor;
+                
+            } catch (error) {
+                console.error('Error loading settings:', error);
+                showStatus('Error loading current settings', 'error');
+            }
+        }
+        
+        // Convert common color names to hex
+        function convertColorToHex(colorName) {
+            const colorMap = {
+                'blue': '#0000ff',
+                'grey': '#808080',
+                'gray': '#808080',
+                'red': '#ff0000',
+                'green': '#008000',
+                'yellow': '#ffff00',
+                'purple': '#800080',
+                'orange': '#ffa500',
+                'pink': '#ffc0cb',
+                'brown': '#a52a2a',
+                'black': '#000000',
+                'white': '#ffffff'
+            };
+            
+            // If it's already a hex color, return it
+            if (colorName.startsWith('#')) {
+                return colorName;
+            }
+            
+            // If it's a known color name, convert it
+            return colorMap[colorName.toLowerCase()] || '#000000';
+        }
+        
+        // Update color value display when color picker changes
+        document.getElementById('desktopColorPicker').addEventListener('input', function() {
+            document.getElementById('desktopColorValue').textContent = this.value;
+        });
+        
+        document.getElementById('taskbarColorPicker').addEventListener('input', function() {
+            document.getElementById('taskbarColorValue').textContent = this.value;
+        });
+        
+        // Apply color settings
+        async function applyColorSettings() {
+            const desktopColor = document.getElementById('desktopColorPicker').value;
+            const taskbarColor = document.getElementById('taskbarColorPicker').value;
+            
+            const newSettings = {
+                desktopcolor: desktopColor,
+                taskbarcolor: taskbarColor
+            };
+            
+            try {
+                const response = await fetch('../update-settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(newSettings)
+                });
+                
+                if (response.ok) {
+                    showStatus('Settings applied successfully! Refresh the page to see changes.', 'success');
+                    
+                    // Apply changes immediately to parent window if possible
+                    try {
+                        if (window.parent && window.parent !== window) {
+                            // Update parent window colors immediately
+                            const parentCanvas = window.parent.document.getElementById('canvas');
+                            const parentTaskbar = window.parent.document.getElementById('taskbar');
+                            
+                            if (parentCanvas) parentCanvas.style.backgroundColor = desktopColor;
+                            if (parentTaskbar) parentTaskbar.style.backgroundColor = taskbarColor;
+                        }
+                    } catch (e) {
+                        console.log('Could not update parent window directly');
+                    }
+                } else {
+                    showStatus('Error saving settings. Please try again.', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving settings:', error);
+                showStatus('Error saving settings. Please try again.', 'error');
+            }
+        }
+        
+        // Show status message
+        function showStatus(message, type) {
+            const statusElement = document.getElementById('statusMessage');
+            statusElement.textContent = message;
+            statusElement.className = `status-message status-${type}`;
+            statusElement.style.display = 'block';
+            
+            // Hide message after 5 seconds
+            setTimeout(() => {
+                statusElement.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Open advanced colors page
+        function openAdvancedColors() {
+            if (window.parent && window.parent.createWindow) {
+                window.parent.createWindow('Advanced Colors', 'settings/colors.html');
+            }
+        }
+        
+        // Load settings when page loads
+        loadCurrentSettings();
+    </script>
+</body>
+</html>
