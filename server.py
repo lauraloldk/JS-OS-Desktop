@@ -1,15 +1,23 @@
-
 import http.server
 import socketserver
+import os
 
-# Set the port number for the server
 PORT = 8000
 
-# Define the request handler class
-class MyRequestHandler(http.server.SimpleHTTPRequestHandler):
-    pass
+# Find den mappe hvor denne fil ligger
+current_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Create a TCP server with the specified port and request handler
-with socketserver.TCPServer(("", PORT), MyRequestHandler) as httpd:
-    print(f"Server started on port {PORT}")
+class MyRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=current_dir, **kwargs)
+
+    def do_GET(self):
+        # Hvis root, så server index.html
+        if self.path in ('/', '/index.html'):
+            self.path = '/index.html'
+        return super().do_GET()
+
+with socketserver.TCPServer(('', PORT), MyRequestHandler) as httpd:
+    print(f'Server started on port {PORT}')
+    print(f'Åbn http://localhost:{PORT} i din browser')
     httpd.serve_forever()
