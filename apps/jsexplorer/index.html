@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JSExplorer</title>
+    <script>
+        const start_titel = 'JSExplorer';
+    </script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Georgia, 'Times New Roman', serif;
+            background: linear-gradient(180deg, #f8f5ee 0%, #ece4d8 100%);
+            color: #1e1b18;
+        }
+
+        .explorer {
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            height: 100vh;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.55);
+        }
+
+        .toolbar button {
+            border: 1px solid #b89d77;
+            background: #fffaf1;
+            border-radius: 999px;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+
+        .pathbar {
+            padding: 0 12px 12px;
+        }
+
+        .pathbar input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px 12px;
+            border: 1px solid #c8b99f;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .listing {
+            padding: 12px;
+            display: grid;
+            gap: 8px;
+            align-content: start;
+            overflow: auto;
+        }
+
+        .entry {
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.72);
+            padding: 10px 12px;
+            cursor: pointer;
+        }
+
+        .entry:hover,
+        .entry.active {
+            background: #fff;
+            border-color: #b89d77;
+        }
+
+        .entry-name {
+            font-weight: 700;
+        }
+
+        .entry-meta {
+            font-size: 12px;
+            color: #675846;
+            margin-top: 4px;
+        }
+
+        .status {
+            position: fixed;
+            right: 12px;
+            bottom: 12px;
+            background: rgba(30, 27, 24, 0.9);
+            color: #fff;
+            padding: 8px 10px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .menu {
+            position: fixed;
+            min-width: 200px;
+            background: #fff;
+            border: 1px solid #c8b99f;
+            border-radius: 10px;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+            padding: 8px;
+            display: none;
+            z-index: 1000;
+        }
+
+        .menu button {
+            width: 100%;
+            text-align: left;
+            border: 0;
+            background: transparent;
+            border-radius: 8px;
+            padding: 8px 10px;
+            cursor: pointer;
+        }
+
+        .menu button:hover {
+            background: #f4ead9;
+        }
+    </style>
+</head>
+<body>
+    <div class="explorer">
+        <div class="toolbar">
+            <button id="upButton">Up</button>
+            <button id="refreshButton">Refresh</button>
+            <button id="newFolderButton">New Folder</button>
+            <button id="openButton">Open</button>
+            <button id="openNotepadButton">Open In Notepad</button>
+        </div>
+        <div class="pathbar">
+            <input id="pathInput" type="text" value="" readonly>
+        </div>
+        <div id="listing" class="listing"></div>
+    </div>
+    <div id="status" class="status"></div>
+    <div id="menu" class="menu"></div>
+
+    <script src="../../dialogs.js"></script>
+    <script>
+        const listEndpoint = '../../fs/list';
+        const executeActionsEndpoint = '../../actions/execute';
+        const listActionsEndpoint = '../../actions/list';
+        let currentPath = '';
+        let selectedEntry = null;
+
+        function showStatus(message) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.style.display = 'block';
+            clearTimeout(showStatus.timer);
+            showStatus.timer = setTimeout(() => {
+                status.style.display = 'none';
+            }, 2200);
+        }
+
+        async function fetchListing(path) {
+            const response = await fetch(`${listEndpoint}?path=${encodeURIComponent(path || '')}`, { cache: 'no-store' });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || `Listing failed (${response.status})`);
+            }
+            return data;
+        }
+
+        async function fetchActions(payload) {
+            const response = await fetch(`${listActionsEndpoint}?target=jsexplorer&payload=${encodeURIComponent(JSON.stringify(payload || {}))}`, { cache: 'no-store' });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || `Actions failed (${response.status})`);
+            }
+            return Array.isArray(data.actions) ? data.actions : [];
+        }
+
+        async function executeAction(actionId, payload) {
+            const response = await fetch(executeActionsEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target: 'jsexplorer', action: actionId, payload: payload || {} })
+            });
+            const data = await response.json();
+            if (!response.ok || data.status !== 'success') {
+                throw new Error(data.message || `Action failed (${response.status})`);
+            }
+            return data;
+        }
+
+        async function loadListing(path) {
+            const listing = await fetchListing(path);
+            currentPath = listing.path;
+            selectedEntry = null;
+            document.getElementById('pathInput').value = currentPath || '/';
+
+            const container = document.getElementById('listing');
+            container.innerHTML = '';
+
+            if (!listing.entries.length) {
+                const empty = document.createElement('div');
+                empty.className = 'entry';
+                empty.textContent = 'Folder is empty';
+                container.appendChild(empty);
+                return;
+            }
+
+            listing.entries.forEach((entry) => {
+                const item = document.createElement('div');
+                item.className = 'entry';
+
+                const name = document.createElement('div');
+                name.className = 'entry-name';
+                name.textContent = entry.name;
+
+                const meta = document.createElement('div');
+                meta.className = 'entry-meta';
+                meta.textContent = entry.type;
+
+                item.appendChild(name);
+                item.appendChild(meta);
+                item.addEventListener('click', () => {
+                    document.querySelectorAll('.entry').forEach((node) => node.classList.remove('active'));
+                    item.classList.add('active');
+                    selectedEntry = entry;
+                });
+                item.addEventListener('dblclick', () => {
+                    openEntry(entry);
+                });
+                item.addEventListener('contextmenu', async (event) => {
+                    event.preventDefault();
+                    selectedEntry = entry;
+                    document.querySelectorAll('.entry').forEach((node) => node.classList.remove('active'));
+                    item.classList.add('active');
+                    await openContextMenu(event.clientX, event.clientY, entry);
+                });
+                container.appendChild(item);
+            });
+        }
+
+        function openEntry(entry) {
+            if (!entry) {
+                return;
+            }
+
+            if (entry.type === 'directory') {
+                loadListing(entry.path).catch((error) => alert(error.message));
+                return;
+            }
+
+            if (window.parent && window.parent.createWindow) {
+                window.parent.createWindow(entry.name, `apps/notepad/index.html?path=${encodeURIComponent(entry.path)}`);
+            }
+        }
+
+        async function openContextMenu(x, y, entry) {
+            const menu = document.getElementById('menu');
+            menu.innerHTML = '';
+            const actions = await fetchActions({ entry: entry, path: currentPath });
+
+            actions.forEach((action) => {
+                const button = document.createElement('button');
+                button.textContent = action.label || action.id;
+                button.addEventListener('click', async () => {
+                    menu.style.display = 'none';
+                    try {
+                        if (action.id === 'jsexplorer.open') {
+                            openEntry(entry);
+                            return;
+                        }
+                        if (action.id === 'jsexplorer.open_notepad') {
+                            if (window.parent && window.parent.createWindow) {
+                                window.parent.createWindow(entry.name, `apps/notepad/index.html?path=${encodeURIComponent(entry.path)}`);
+                            }
+                            return;
+                        }
+                        await executeAction(action.id, { entry: entry, path: currentPath });
+                        await loadListing(currentPath);
+                        showStatus(action.label || action.id);
+                    } catch (error) {
+                        alert(error.message);
+                    }
+                });
+                menu.appendChild(button);
+            });
+
+            menu.style.left = `${x}px`;
+            menu.style.top = `${y}px`;
+            menu.style.display = 'block';
+        }
+
+        async function createFolder() {
+            const folderName = prompt('Folder name');
+            if (!folderName) {
+                return;
+            }
+            await executeAction('jsexplorer.new_folder', { path: currentPath, name: folderName });
+            await loadListing(currentPath);
+            showStatus('Folder created');
+        }
+
+        document.getElementById('upButton').addEventListener('click', () => {
+            const parts = currentPath.split('/').filter(Boolean);
+            parts.pop();
+            loadListing(parts.join('/')).catch((error) => alert(error.message));
+        });
+        document.getElementById('refreshButton').addEventListener('click', () => loadListing(currentPath).catch((error) => alert(error.message)));
+        document.getElementById('newFolderButton').addEventListener('click', () => createFolder().catch((error) => alert(error.message)));
+        document.getElementById('openButton').addEventListener('click', () => openEntry(selectedEntry));
+        document.getElementById('openNotepadButton').addEventListener('click', () => {
+            if (selectedEntry && selectedEntry.type === 'file' && window.parent && window.parent.createWindow) {
+                window.parent.createWindow(selectedEntry.name, `apps/notepad/index.html?path=${encodeURIComponent(selectedEntry.path)}`);
+            }
+        });
+
+        document.addEventListener('click', () => {
+            document.getElementById('menu').style.display = 'none';
+        });
+
+        loadListing('').catch((error) => alert(error.message));
+    </script>
+</body>
+</html>
