@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Notepad</title>
+    <script>
+        const start_titel = 'Notepad';
+    </script>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(180deg, #f4f6f8 0%, #e8edf2 100%);
+            color: #18212b;
+        }
+
+        .editor-shell {
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            height: 100vh;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.75);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .toolbar button {
+            border: 1px solid #98abc0;
+            background: #fff;
+            border-radius: 999px;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+
+        .path-row {
+            padding: 0 12px 12px;
+        }
+
+        .path-row input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px 12px;
+            border: 1px solid #cad6e1;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.85);
+        }
+
+        textarea {
+            margin: 0 12px 12px;
+            width: calc(100% - 24px);
+            height: calc(100vh - 112px);
+            box-sizing: border-box;
+            resize: none;
+            border: 1px solid #cad6e1;
+            border-radius: 14px;
+            padding: 16px;
+            font: inherit;
+            line-height: 1.5;
+            background: rgba(255, 255, 255, 0.92);
+        }
+
+        .menu {
+            position: fixed;
+            min-width: 200px;
+            background: #fff;
+            border: 1px solid #cad6e1;
+            border-radius: 10px;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+            padding: 8px;
+            display: none;
+            z-index: 1000;
+        }
+
+        .menu button {
+            width: 100%;
+            text-align: left;
+            border: 0;
+            background: transparent;
+            border-radius: 8px;
+            padding: 8px 10px;
+            cursor: pointer;
+        }
+
+        .menu button:hover {
+            background: #ebf2ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="editor-shell">
+        <div class="toolbar">
+            <button id="newButton">New</button>
+            <button id="openButton">Open</button>
+            <button id="saveButton">Save</button>
+            <button id="saveAsButton">Save As</button>
+            <button id="actionsButton">Actions</button>
+        </div>
+        <div class="path-row">
+            <input id="pathInput" type="text" value="Unsaved file" readonly>
+        </div>
+        <textarea id="editor" spellcheck="false"></textarea>
+    </div>
+    <div id="menu" class="menu"></div>
+
+    <script src="../../dialogs.js"></script>
+    <script>
+        const readEndpoint = '../../fs/read';
+        const writeEndpoint = '../../fs/write';
+        const listActionsEndpoint = '../../actions/list';
+        let currentPath = '';
+        let dirty = false;
+
+        function updateTitle() {
+            const pathInput = document.getElementById('pathInput');
+            pathInput.value = currentPath || 'Unsaved file';
+        }
+
+        async function readFile(path) {
+            const response = await fetch(`${readEndpoint}?path=${encodeURIComponent(path)}`, { cache: 'no-store' });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || `Read failed (${response.status})`);
+            }
+            return data;
+        }
+
+        async function writeFile(path, content) {
+            const response = await fetch(writeEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: path, content: content })
+            });
+            const data = await response.json();
+            if (!response.ok || data.status !== 'success') {
+                throw new Error(data.message || `Save failed (${response.status})`);
+            }
+            return data;
+        }
+
+        async function fetchActions() {
+            const response = await fetch(`${listActionsEndpoint}?target=notepad&payload=${encodeURIComponent(JSON.stringify({ path: currentPath, dirty: dirty }))}`, { cache: 'no-store' });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || `Actions failed (${response.status})`);
+            }
+            return Array.isArray(data.actions) ? data.actions : [];
+        }
+
+        async function loadPath(path) {
+            const file = await readFile(path);
+            document.getElementById('editor').value = file.content;
+            currentPath = file.path;
+            dirty = false;
+            updateTitle();
+        }
+
+        async function openDialog() {
+            const result = await window.JSOSDialogs.openFileDialog({ path: currentPath.includes('/') ? currentPath.split('/').slice(0, -1).join('/') : '' });
+            if (!result) {
+                return;
+            }
+            await loadPath(result.path);
+        }
+
+        async function saveAsDialog() {
+            const currentName = currentPath ? currentPath.split('/').pop() : 'untitled.txt';
+            const startPath = currentPath.includes('/') ? currentPath.split('/').slice(0, -1).join('/') : '';
+            const result = await window.JSOSDialogs.saveFileDialog({ path: startPath, fileName: currentName });
+            if (!result) {
+                return false;
+            }
+            await writeFile(result.path, document.getElementById('editor').value);
+            currentPath = result.path;
+            dirty = false;
+            updateTitle();
+            return true;
+        }
+
+        async function saveCurrent() {
+            if (!currentPath) {
+                return saveAsDialog();
+            }
+            await writeFile(currentPath, document.getElementById('editor').value);
+            dirty = false;
+            updateTitle();
+            return true;
+        }
+
+        function newFile() {
+            currentPath = '';
+            dirty = false;
+            document.getElementById('editor').value = '';
+            updateTitle();
+        }
+
+        async function openActionsMenu() {
+            const menu = document.getElementById('menu');
+            menu.innerHTML = '';
+            const actions = await fetchActions();
+            const actionHandlers = {
+                'notepad.new': newFile,
+                'notepad.open': openDialog,
+                'notepad.save': saveCurrent,
+                'notepad.save_as': saveAsDialog
+            };
+
+            actions.forEach((action) => {
+                const button = document.createElement('button');
+                button.textContent = action.label || action.id;
+                button.addEventListener('click', async () => {
+                    menu.style.display = 'none';
+                    const handler = actionHandlers[action.id];
+                    if (handler) {
+                        await handler();
+                    }
+                });
+                menu.appendChild(button);
+            });
+
+            const rect = document.getElementById('actionsButton').getBoundingClientRect();
+            menu.style.left = `${rect.left}px`;
+            menu.style.top = `${rect.bottom + 8}px`;
+            menu.style.display = 'block';
+        }
+
+        document.getElementById('newButton').addEventListener('click', newFile);
+        document.getElementById('openButton').addEventListener('click', () => openDialog().catch((error) => alert(error.message)));
+        document.getElementById('saveButton').addEventListener('click', () => saveCurrent().catch((error) => alert(error.message)));
+        document.getElementById('saveAsButton').addEventListener('click', () => saveAsDialog().catch((error) => alert(error.message)));
+        document.getElementById('actionsButton').addEventListener('click', () => openActionsMenu().catch((error) => alert(error.message)));
+        document.getElementById('editor').addEventListener('input', () => {
+            dirty = true;
+        });
+        document.addEventListener('click', (event) => {
+            const menu = document.getElementById('menu');
+            if (!menu.contains(event.target) && event.target.id !== 'actionsButton') {
+                menu.style.display = 'none';
+            }
+        });
+
+        const params = new URLSearchParams(window.location.search);
+        const path = params.get('path');
+        updateTitle();
+        if (path) {
+            loadPath(path).catch((error) => alert(error.message));
+        }
+    </script>
+</body>
+</html>
