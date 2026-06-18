@@ -2,12 +2,15 @@ window.createWindow = function(title, url) {
     const canvas = document.getElementById('canvas');
     const windowDiv = document.createElement('div');
     windowDiv.classList.add('window');
+    windowDiv.dataset.windowTitle = title;
+    windowDiv.dataset.windowUrl = url;
     windowDiv.innerHTML = `
         <div class="window-header">
             <span class="window-title">${title}</span>
             <div class="window-controls">
+                <button class="add-shortcut" title="Add to desktop">Add Shortcut</button>
                 <button class="help" title="Help">?</button>
-                <button class="window-close" title="Close">×</button>
+                <button class="window-close" title="Close">X</button>
             </div>
         </div>
         <iframe class="window-content" src="${url}"></iframe>
@@ -54,6 +57,32 @@ window.createWindow = function(title, url) {
     const windowCloseButton = windowDiv.querySelector('.window-close');
     windowCloseButton.addEventListener('click', function() {
         canvas.removeChild(windowDiv);
+    });
+
+    const shortcutButton = windowDiv.querySelector('.add-shortcut');
+    const shortcutTarget = {
+        title: title,
+        url: url,
+        type: url.startsWith('apps/') ? 'app' : 'file'
+    };
+
+    if (window.JSOSShortcuts && typeof window.JSOSShortcuts.syncButtonState === 'function') {
+        window.JSOSShortcuts.syncButtonState(shortcutButton, shortcutTarget);
+    }
+
+    shortcutButton.addEventListener('click', async function() {
+        if (!window.JSOSShortcuts || typeof window.JSOSShortcuts.toggleShortcutForTarget !== 'function') {
+            alert('Shortcut system is not loaded yet.');
+            return;
+        }
+
+        try {
+            await window.JSOSShortcuts.toggleShortcutForTarget(shortcutTarget);
+            window.JSOSShortcuts.syncButtonState(shortcutButton, shortcutTarget);
+        } catch (error) {
+            console.error('Failed to toggle shortcut:', error);
+            alert('Could not update shortcut.');
+        }
     });
     
     // hide help button if there is no help.html file in the same directory as the file using the "url" parameter

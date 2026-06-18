@@ -7,7 +7,7 @@
             margin: 0;
             padding: 0;
         }
-        
+
         #canvas {
             width: 100%;
             height: calc(100vh - 50px); /* Subtract the height of the taskbar from the viewport height */
@@ -27,7 +27,7 @@
             box-sizing: border-box;
         }
 
-        #startButton, #settingsButton {
+        #startButton, #runAppButton, #settingsButton {
             height: 36px;
             margin-right: 10px;
             padding: 0 15px;
@@ -37,8 +37,8 @@
             cursor: pointer;
             font-size: 14px;
         }
-        
-        #startButton:hover, #settingsButton:hover {
+
+        #startButton:hover, #runAppButton:hover, #settingsButton:hover {
             background-color: #f0f0f0;
         }
 
@@ -51,7 +51,7 @@
             flex-grow: 1;
             max-width: 180px;
         }
-        
+
         #clock {
             margin-left: auto;
             font-weight: bold;
@@ -74,7 +74,7 @@
             left: 50px;
             overflow: hidden;
         }
-        
+
         .window-header {
             height: 30px;
             background-color: #f0f0f0;
@@ -86,17 +86,17 @@
             cursor: move;
             user-select: none;
         }
-        
+
         .window-title {
             font-weight: bold;
             font-size: 14px;
         }
-        
+
         .window-controls {
             display: flex;
             gap: 5px;
         }
-        
+
         .window-close, .help {
             width: 20px;
             height: 20px;
@@ -108,111 +108,48 @@
             align-items: center;
             justify-content: center;
         }
-        
+
         .window-close {
             background-color: #ff5f57;
             color: white;
         }
-        
+
         .help {
             background-color: #007acc;
             color: white;
         }
-        
+
         .window-close:hover {
             background-color: #ff3b30;
         }
-        
+
         .help:hover {
             background-color: #005a9e;
         }
-        
+
         .window-content {
             width: 100%;
             height: calc(100% - 31px);
             border: none;
         }
-
     </style>
-    
+
     <script src="window.js"></script>
 </head>
 <body>
     <div id="canvas"></div>
 
     <div id="taskbar">
+        <button id="startButton">Start</button>
         <input type="text" id="appPicker" placeholder="App-picker">
-        <button id="startButton">Run App</button>
+        <button id="runAppButton">Run App</button>
         <button id="settingsButton">Settings</button>
         <span id="clock"></span>
     </div>
 
-    <script>
-        // Load the JSON data from os-settings.json
-        fetch('data/os-settings.json')
-            .then(response => response.json())
-            .then(data => {
-                // Access the value of "desktopcolor"
-                const desktopColor = data.desktopcolor;
-
-                // Set the background-color of #canvas
-                const canvas = document.getElementById('canvas');
-                canvas.style.backgroundColor = desktopColor;
-            });
-
-        // Load the JSON file
-        fetch('data/os-settings.json')
-            .then(response => response.json())
-            .then(data => {
-                // Extract the value of "taskbarcolor"
-                const taskbarColor = data.taskbarcolor;
-
-                // Select the "taskbar" div
-                const taskbarDiv = document.getElementById('taskbar');
-
-                // Set the background color of the "taskbar" div
-                taskbarDiv.style.backgroundColor = taskbarColor;
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-
-         // Add click event listener to the startButton
-    const startButton = document.getElementById('startButton');
-    startButton.addEventListener('click', function() {
-        const appPicker = document.getElementById('appPicker');
-        console.log(appPicker.value);
-        createWindow(appPicker.value, "apps/" + appPicker.value + "/index.html"); // Call the createWindow() function from window.js
-    });
-
-    // Add click event listener to the settingsButton
-    const settingsButton = document.getElementById('settingsButton');
-    settingsButton.addEventListener('click', function() {
-        createWindow("Settings", "settings/index.html");
-    });
-
-    // Update clock
-    function updateClock() {
-        const now = new Date();
-        const timeString = now.toLocaleTimeString('da-DK', {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-        document.getElementById('clock').textContent = timeString;
-    }
-    
-    // Update clock immediately and then every second
-    updateClock();
-    setInterval(updateClock, 1000);
-
-    </script>
+    <script src="shortcuts.js"></script>
+    <script src="dialogs.js"></script>
+    <script src="desktop.js"></script>
+    <script src="taskbar.js"></script>
 </body>
 </html>
-<script>
-
-
-
-
-
-
-
