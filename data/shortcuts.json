@@ -1,0 +1,11 @@
+{
+  "shortcuts": [
+    {
+      "title": "Hello World",
+      "url": "apps/helloworld/index.html",
+      "type": "app",
+      "x": 138,
+      "y": 62
+    }
+  ]
+}
