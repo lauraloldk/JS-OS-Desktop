@@ -142,6 +142,7 @@
         const listActionsEndpoint = '../../actions/list';
         let currentPath = '';
         let selectedEntry = null;
+        let preselectedName = '';
 
         function showStatus(message) {
             const status = document.getElementById('status');
@@ -215,6 +216,12 @@
 
                 item.appendChild(name);
                 item.appendChild(meta);
+
+                if (preselectedName && entry.name === preselectedName) {
+                    item.classList.add('active');
+                    selectedEntry = entry;
+                }
+
                 item.addEventListener('click', () => {
                     document.querySelectorAll('.entry').forEach((node) => node.classList.remove('active'));
                     item.classList.add('active');
@@ -232,6 +239,8 @@
                 });
                 container.appendChild(item);
             });
+
+            preselectedName = '';
         }
 
         function openEntry(entry) {
@@ -313,7 +322,11 @@
             document.getElementById('menu').style.display = 'none';
         });
 
-        loadListing('').catch((error) => alert(error.message));
+        const startupParams = new URLSearchParams(window.location.search);
+        const startupPath = startupParams.get('path') || '';
+        preselectedName = startupParams.get('select') || '';
+
+        loadListing(startupPath).catch((error) => alert(error.message));
     </script>
 </body>
 </html>
