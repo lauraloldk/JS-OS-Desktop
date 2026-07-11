@@ -7,6 +7,10 @@ import threading
 import re
 import time
 import importlib
+import sys
+
+sys.dont_write_bytecode = True
+
 import actions as actions_core
 
 try:

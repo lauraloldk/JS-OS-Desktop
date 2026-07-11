@@ -8,6 +8,8 @@
     let subMenu;
     let startButton;
     let startItems = [];
+    let windowBar;
+    const windowsById = new Map();
 
     function ensureMenus() {
         if (!startMenu) {
@@ -95,9 +97,133 @@
                 color: #777;
                 margin: 6px;
             }
+
+            #windowBar {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                min-width: 120px;
+                flex: 1 1 auto;
+                margin-right: 10px;
+                overflow-x: auto;
+                overflow-y: hidden;
+                scrollbar-width: thin;
+            }
+
+            .windowbar-item {
+                border: 1px solid #c7c7c7;
+                border-radius: 7px;
+                background: #ffffff;
+                color: #222;
+                padding: 6px 10px;
+                font-size: 12px;
+                cursor: pointer;
+                white-space: nowrap;
+                max-width: 180px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .windowbar-item.active {
+                border-color: #4f86c6;
+                background: #dfeeff;
+            }
+
+            .windowbar-item.minimized {
+                opacity: 0.7;
+                background: #f5f5f5;
+            }
         `;
 
         document.head.appendChild(style);
+    }
+
+    function ensureWindowBar() {
+        if (windowBar) {
+            return windowBar;
+        }
+
+        const taskbar = document.getElementById('taskbar');
+        const clock = document.getElementById('clock');
+        if (!taskbar) {
+            return null;
+        }
+
+        windowBar = document.createElement('div');
+        windowBar.id = 'windowBar';
+
+        if (clock && clock.parentNode === taskbar) {
+            taskbar.insertBefore(windowBar, clock);
+        } else {
+            taskbar.appendChild(windowBar);
+        }
+
+        return windowBar;
+    }
+
+    function renderWindowBar() {
+        const bar = ensureWindowBar();
+        if (!bar) {
+            return;
+        }
+
+        bar.innerHTML = '';
+
+        const windows = Array.from(windowsById.values()).sort(function(a, b) {
+            return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+        });
+
+        windows.forEach(function(state) {
+            const button = document.createElement('button');
+            button.className = 'windowbar-item';
+            if (state.active) {
+                button.classList.add('active');
+            }
+            if (state.minimized) {
+                button.classList.add('minimized');
+            }
+
+            button.textContent = state.title || state.id;
+            button.title = state.title || state.id;
+
+            button.addEventListener('click', function() {
+                if (!window.JSOSWindows || typeof window.JSOSWindows.toggleMinimize !== 'function') {
+                    return;
+                }
+                window.JSOSWindows.toggleMinimize(state.id);
+            });
+
+            bar.appendChild(button);
+        });
+    }
+
+    function bindWindowBarEvents() {
+        document.addEventListener('jsos-window-created', function(event) {
+            const state = event.detail;
+            windowsById.set(state.id, state);
+            renderWindowBar();
+        });
+
+        document.addEventListener('jsos-window-updated', function(event) {
+            const state = event.detail;
+            if (windowsById.has(state.id)) {
+                windowsById.set(state.id, state);
+                renderWindowBar();
+            }
+        });
+
+        document.addEventListener('jsos-window-closed', function(event) {
+            const state = event.detail || {};
+            windowsById.delete(state.id);
+            renderWindowBar();
+        });
+
+        if (window.JSOSWindows && typeof window.JSOSWindows.list === 'function') {
+            window.JSOSWindows.list().forEach(function(state) {
+                windowsById.set(state.id, state);
+            });
+            renderWindowBar();
+        }
     }
 
     async function fetchStartItems() {
@@ -271,6 +397,7 @@
 
         injectStyles();
         ensureMenus();
+        ensureWindowBar();
 
         startButton.textContent = 'Start';
         startButton.setAttribute('aria-expanded', 'false');
@@ -280,6 +407,7 @@
         });
 
         bindGlobalClose();
+        bindWindowBarEvents();
     }
 
     document.addEventListener('DOMContentLoaded', initTaskbar);

@@ -97,7 +97,7 @@
             gap: 5px;
         }
 
-        .window-close, .help {
+        .window-close, .window-minimize, .help {
             width: 20px;
             height: 20px;
             border: none;
@@ -119,6 +119,12 @@
             color: white;
         }
 
+        .window-minimize {
+            background-color: #ffbd2f;
+            color: #333;
+            font-weight: bold;
+        }
+
         .window-close:hover {
             background-color: #ff3b30;
         }
@@ -127,10 +133,28 @@
             background-color: #005a9e;
         }
 
+        .window-minimize:hover {
+            background-color: #e0a321;
+        }
+
         .window-content {
             width: 100%;
             height: calc(100% - 31px);
             border: none;
+        }
+
+        .window-active {
+            box-shadow: 0 8px 22px rgba(0,0,0,0.28);
+        }
+
+        .window-resizer {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            width: 14px;
+            height: 14px;
+            cursor: nwse-resize;
+            background: linear-gradient(135deg, transparent 0%, transparent 45%, #888 45%, #888 100%);
         }
     </style>
 

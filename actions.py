@@ -1,6 +1,10 @@
 import importlib.util
 import os
+import sys
 from typing import Dict, List, Any
+
+
+sys.dont_write_bytecode = True
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
