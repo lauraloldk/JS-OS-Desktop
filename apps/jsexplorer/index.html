@@ -245,7 +245,7 @@
             }
 
             if (window.parent && window.parent.createWindow) {
-                window.parent.createWindow(entry.name, `apps/notepad/index.html?path=${encodeURIComponent(entry.path)}`);
+                window.parent.createWindow(`Notepad - ${entry.name}`, `apps/notepad/index.html?path=${encodeURIComponent(entry.path)}`);
             }
         }
 
@@ -266,7 +266,7 @@
                         }
                         if (action.id === 'jsexplorer.open_notepad') {
                             if (window.parent && window.parent.createWindow) {
-                                window.parent.createWindow(entry.name, `apps/notepad/index.html?path=${encodeURIComponent(entry.path)}`);
+                                window.parent.createWindow(`Notepad - ${entry.name}`, `apps/notepad/index.html?path=${encodeURIComponent(entry.path)}`);
                             }
                             return;
                         }
@@ -305,7 +305,7 @@
         document.getElementById('openButton').addEventListener('click', () => openEntry(selectedEntry));
         document.getElementById('openNotepadButton').addEventListener('click', () => {
             if (selectedEntry && selectedEntry.type === 'file' && window.parent && window.parent.createWindow) {
-                window.parent.createWindow(selectedEntry.name, `apps/notepad/index.html?path=${encodeURIComponent(selectedEntry.path)}`);
+                window.parent.createWindow(`Notepad - ${selectedEntry.name}`, `apps/notepad/index.html?path=${encodeURIComponent(selectedEntry.path)}`);
             }
         });
 
