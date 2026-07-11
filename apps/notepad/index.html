@@ -113,9 +113,33 @@
         let currentPath = '';
         let dirty = false;
 
+        function getFileName(path) {
+            return String(path || '').split('/').filter(Boolean).pop() || 'Untitled';
+        }
+
+        function syncHostWindowTitle() {
+            const title = currentPath ? `Notepad - ${getFileName(currentPath)}` : 'Notepad';
+            document.title = title;
+
+            if (!window.parent || window.parent === window || !window.frameElement) {
+                return;
+            }
+
+            const hostWindow = window.frameElement.closest('.window');
+            if (!hostWindow) {
+                return;
+            }
+
+            const hostWindowId = hostWindow.dataset.windowId;
+            if (window.parent.JSOSWindows && typeof window.parent.JSOSWindows.updateTitle === 'function' && hostWindowId) {
+                window.parent.JSOSWindows.updateTitle(hostWindowId, title);
+            }
+        }
+
         function updateTitle() {
             const pathInput = document.getElementById('pathInput');
             pathInput.value = currentPath || 'Unsaved file';
+            syncHostWindowTitle();
         }
 
         async function readFile(path) {
