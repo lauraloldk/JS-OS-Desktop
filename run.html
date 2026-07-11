@@ -1,15 +1,110 @@
-<!-- Add a textbox and a button -->
-<input type="text" id="appName" placeholder="Enter app name">
-<button onclick="runApp()">Run</button>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Run Command</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 16px;
+            font-family: Consolas, 'Courier New', monospace;
+            background: #f4f7fa;
+            color: #1f2a37;
+        }
 
-<script src="window.js"></script>
-<script>
-    function runApp() {
-        // Get the textbox input
-        var appName = document.getElementById("appName").value;
+        .runner {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
 
-        // Call the createWindow() function with the textbox input as the first argument
-        // and "/apps/{textbox input}/index.html" as the second argument
-        createWindow(appName, `/apps/${appName}/index.html`);
-    }
-</script>
+        #commandInput {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #b7c2cf;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font: inherit;
+            background: #fff;
+        }
+
+        #runButton {
+            border: 1px solid #95aac2;
+            border-radius: 8px;
+            padding: 10px 14px;
+            cursor: pointer;
+            background: #e9f1ff;
+            font: inherit;
+        }
+
+        #examples {
+            font-size: 12px;
+            color: #4a5b70;
+            margin-bottom: 10px;
+        }
+
+        #status {
+            min-height: 20px;
+            font-size: 13px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: #fff;
+            border: 1px solid #d7dee7;
+        }
+
+        #status.error {
+            background: #fff1f1;
+            border-color: #e6b7b7;
+            color: #8a1f1f;
+        }
+
+        #status.success {
+            background: #f1fff4;
+            border-color: #b7e2be;
+            color: #1f6b2d;
+        }
+    </style>
+</head>
+<body>
+    <div class="runner">
+        <input type="text" id="commandInput" placeholder="Type command... e.g. open test.txt in notepad">
+        <button id="runButton">Run</button>
+    </div>
+    <div id="examples">Examples: help, run notepad, rum jsexplorer, notepad, open test.txt in notepad, open test.txt in jsexplorer</div>
+    <div id="status"></div>
+
+    <script src="window.js"></script>
+    <script src="cmd/core.js"></script>
+    <script src="cmd/openin.js"></script>
+    <script src="cmd/apps.js"></script>
+    <script>
+        const commandInput = document.getElementById('commandInput');
+        const runButton = document.getElementById('runButton');
+        const status = document.getElementById('status');
+
+        function setStatus(message, type) {
+            status.textContent = message;
+            status.className = type || '';
+        }
+
+        async function runCommand() {
+            const text = commandInput.value;
+            try {
+                const result = await window.JSOSCmd.execute(text);
+                setStatus(result, 'success');
+            } catch (error) {
+                setStatus(error.message, 'error');
+            }
+        }
+
+        runButton.addEventListener('click', function() {
+            runCommand();
+        });
+        commandInput.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                runCommand();
+            }
+        });
+    </script>
+</body>
+</html>

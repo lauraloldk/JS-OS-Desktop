@@ -11,6 +11,58 @@
     let windowBar;
     const windowsById = new Map();
 
+    async function runTaskbarCommand(inputText) {
+        const text = String(inputText || '').trim();
+        if (!text) {
+            return;
+        }
+
+        if (window.JSOSCmd && typeof window.JSOSCmd.execute === 'function') {
+            await window.JSOSCmd.execute(text);
+            return;
+        }
+
+        if (typeof window.createWindow === 'function') {
+            window.createWindow(text, `apps/${text.toLowerCase()}/index.html`);
+            return;
+        }
+
+        throw new Error('No command runner or window system available');
+    }
+
+    function bindTaskbarCommandRunner() {
+        const input = document.getElementById('appPicker');
+        const runButton = document.getElementById('runAppButton');
+
+        if (!input || !runButton) {
+            return;
+        }
+
+        async function runFromInput() {
+            const text = input.value.trim();
+            if (!text) {
+                return;
+            }
+
+            try {
+                await runTaskbarCommand(text);
+            } catch (error) {
+                console.error('Taskbar command failed:', error);
+                alert(error.message || 'Command failed');
+            }
+        }
+
+        runButton.addEventListener('click', function() {
+            runFromInput();
+        });
+
+        input.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                runFromInput();
+            }
+        });
+    }
+
     function ensureMenus() {
         if (!startMenu) {
             startMenu = document.createElement('div');
@@ -408,6 +460,7 @@
 
         bindGlobalClose();
         bindWindowBarEvents();
+        bindTaskbarCommandRunner();
     }
 
     document.addEventListener('DOMContentLoaded', initTaskbar);

@@ -215,44 +215,8 @@
 	}
 
 	function bindUiEvents() {
-		const runAppButton = document.getElementById('runAppButton');
 		const settingsButton = document.getElementById('settingsButton');
-		const appPicker = document.getElementById('appPicker');
 		const canvas = document.getElementById('canvas');
-
-		if (runAppButton && appPicker) {
-			runAppButton.addEventListener('click', async function() {
-				const appName = appPicker.value.trim();
-				if (!appName) {
-					return;
-				}
-
-				try {
-					await runApp(appName);
-				} catch (error) {
-					console.error(error);
-					alert(error.message);
-				}
-			});
-
-			appPicker.addEventListener('keydown', async function(event) {
-				if (event.key !== 'Enter') {
-					return;
-				}
-
-				const appName = appPicker.value.trim();
-				if (!appName) {
-					return;
-				}
-
-				try {
-					await runApp(appName);
-				} catch (error) {
-					console.error(error);
-					alert(error.message);
-				}
-			});
-		}
 
 		if (settingsButton) {
 			settingsButton.addEventListener('click', function() {
