@@ -112,13 +112,14 @@
         const listActionsEndpoint = '../../actions/list';
         let currentPath = '';
         let dirty = false;
+        let transientTitle = '';
 
         function getFileName(path) {
             return String(path || '').split('/').filter(Boolean).pop() || 'Untitled';
         }
 
         function syncHostWindowTitle() {
-            const title = currentPath ? `Notepad - ${getFileName(currentPath)}` : 'Notepad';
+            const title = currentPath ? `Notepad - ${getFileName(currentPath)}` : (transientTitle || 'Notepad');
             document.title = title;
 
             if (!window.parent || window.parent === window || !window.frameElement) {
@@ -138,7 +139,7 @@
 
         function updateTitle() {
             const pathInput = document.getElementById('pathInput');
-            pathInput.value = currentPath || 'Unsaved file';
+            pathInput.value = currentPath || transientTitle || 'Unsaved file';
             syncHostWindowTitle();
         }
 
@@ -177,6 +178,7 @@
             const file = await readFile(path);
             document.getElementById('editor').value = file.content;
             currentPath = file.path;
+            transientTitle = '';
             dirty = false;
             updateTitle();
         }
@@ -198,6 +200,7 @@
             }
             await writeFile(result.path, document.getElementById('editor').value);
             currentPath = result.path;
+            transientTitle = '';
             dirty = false;
             updateTitle();
             return true;
@@ -215,6 +218,7 @@
 
         function newFile() {
             currentPath = '';
+            transientTitle = '';
             dirty = false;
             document.getElementById('editor').value = '';
             updateTitle();
@@ -267,6 +271,18 @@
 
         const params = new URLSearchParams(window.location.search);
         const path = params.get('path');
+        const inlineContent = params.get('content');
+        const inlineTitle = params.get('title');
+
+        if (inlineTitle) {
+            transientTitle = inlineTitle;
+        }
+
+        if (inlineContent !== null) {
+            document.getElementById('editor').value = inlineContent;
+            dirty = false;
+        }
+
         updateTitle();
         if (path) {
             loadPath(path).catch((error) => alert(error.message));
