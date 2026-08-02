@@ -336,8 +336,24 @@
                     await renderPlugins();
                 });
 
+                const uninstall = document.createElement('button');
+                uninstall.textContent = 'Uninstall';
+                uninstall.disabled = !pkg.isInstalled;
+                uninstall.addEventListener('click', async () => {
+                    const ok = confirm(`Uninstall package ${pkg.id}?`);
+                    if (!ok) {
+                        return;
+                    }
+
+                    await apiPost('../../plugins/uninstall', { packageId: pkg.id });
+                    showStatus(`${pkg.id} uninstalled`);
+                    await renderPackages();
+                    await renderPlugins();
+                });
+
                 row.appendChild(install);
                 row.appendChild(update);
+                row.appendChild(uninstall);
                 card.appendChild(title);
                 card.appendChild(meta);
                 card.appendChild(row);

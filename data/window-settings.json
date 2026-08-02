@@ -6,8 +6,12 @@
         "height": 578
       },
       "settings/index.html": {
-        "width": 1006,
-        "height": 602
+        "width": 1048,
+        "height": 715
+      },
+      "settings/plugin-manager/index.html": {
+        "width": 1072,
+        "height": 631
       }
     }
   },

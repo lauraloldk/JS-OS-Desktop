@@ -5,27 +5,52 @@
       "required": true,
       "name": "Core System Plugin",
       "version": "1.0.0",
-      "source": "builtin"
+      "source": "builtin",
+      "requiredDependencies": [],
+      "optionalDependencies": []
     },
     "zip": {
       "enabled": true,
       "required": false,
       "name": "ZIP Filesystem Support",
       "version": "1.0.0",
-      "source": "builtin"
+      "source": "builtin",
+      "requiredDependencies": [],
+      "optionalDependencies": []
     },
     "taskmanager": {
       "enabled": false,
       "required": false,
       "name": "Task Manager Integration",
       "version": "1.0.0",
-      "source": "builtin"
+      "source": "builtin",
+      "requiredDependencies": [],
+      "optionalDependencies": [
+        "zip"
+      ]
+    },
+    "jsexplorer_tools": {
+      "enabled": true,
+      "required": false,
+      "name": "JSExplorer Tools",
+      "version": "1.0.0",
+      "source": "builtin",
+      "requiredDependencies": [],
+      "optionalDependencies": [
+        "zip"
+      ]
+    },
+    "notepad_tools": {
+      "enabled": true,
+      "required": false,
+      "name": "Notepad Tools",
+      "version": "1.0.0",
+      "source": "builtin",
+      "requiredDependencies": [],
+      "optionalDependencies": [
+        "zip"
+      ]
     }
   },
-  "packages": {
-    "taskmanager": {
-      "version": "1.0.0",
-      "updatedAt": 1785688791
-    }
-  }
+  "packages": {}
 }

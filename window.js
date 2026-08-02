@@ -252,6 +252,54 @@
         await saveWindowSettingsDocument();
     }
 
+    function bootstrapPluginsInIframe(iframeElement) {
+        if (!iframeElement) {
+            return;
+        }
+
+        try {
+            const frameWindow = iframeElement.contentWindow;
+            const frameDocument = iframeElement.contentDocument;
+            if (!frameWindow || !frameDocument) {
+                return;
+            }
+
+            function startToolbarBridge() {
+                try {
+                    if (frameWindow.JSOSPlugins && typeof frameWindow.JSOSPlugins.installAutoToolbarBridge === 'function') {
+                        frameWindow.JSOSPlugins.installAutoToolbarBridge(frameWindow);
+                    }
+                } catch (error) {
+                    // Keep app usable if plugin bridge cannot initialize.
+                }
+            }
+
+            if (frameWindow.JSOSPlugins && typeof frameWindow.JSOSPlugins.installAutoToolbarBridge === 'function') {
+                startToolbarBridge();
+                return;
+            }
+
+            const existingScript = frameDocument.querySelector('script[data-jsos-plugins-bridge="1"]');
+            if (existingScript) {
+                existingScript.addEventListener('load', startToolbarBridge, { once: true });
+                return;
+            }
+
+            const script = frameDocument.createElement('script');
+            script.src = '/plugins-bridge.js';
+            script.dataset.jsosPluginsBridge = '1';
+            script.addEventListener('load', startToolbarBridge, { once: true });
+
+            if (frameDocument.head) {
+                frameDocument.head.appendChild(script);
+            } else if (frameDocument.documentElement) {
+                frameDocument.documentElement.appendChild(script);
+            }
+        } catch (error) {
+            // Ignore cross-frame bootstrap issues.
+        }
+    }
+
     function setWindowActive(meta, active) {
         meta.active = !!active;
         if (meta.windowDiv) {
@@ -552,6 +600,9 @@
         });
 
         windowContent.style.backgroundColor = 'grey';
+        windowContent.addEventListener('load', function() {
+            bootstrapPluginsInIframe(windowContent);
+        });
 
         canvas.appendChild(windowDiv);
         focusWindowById(windowId);

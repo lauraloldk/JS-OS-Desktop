@@ -70,6 +70,15 @@
     </div>
 
     <script>
+        function getSelfWindowId() {
+            try {
+                const hostWindow = window.frameElement && window.frameElement.closest('.window');
+                return hostWindow ? String(hostWindow.dataset.windowId || '') : '';
+            } catch (error) {
+                return '';
+            }
+        }
+
         async function loadWindows() {
             const container = document.getElementById('list');
             container.innerHTML = '';
@@ -81,6 +90,7 @@
             }
 
             const windows = api.list();
+            const selfWindowId = getSelfWindowId();
             if (!windows.length) {
                 container.textContent = 'No open windows.';
                 return;
@@ -101,15 +111,20 @@
                     loadWindows();
                 });
 
-                const toggle = document.createElement('button');
-                toggle.textContent = item.minimized ? 'Restore' : 'Minimize';
-                toggle.addEventListener('click', () => {
-                    api.toggleMinimize(item.id);
-                    loadWindows();
-                });
+                let toggle = null;
+                if (item.id !== selfWindowId) {
+                    toggle = document.createElement('button');
+                    toggle.textContent = item.minimized ? 'Restore' : 'Minimize';
+                    toggle.addEventListener('click', () => {
+                        api.toggleMinimize(item.id);
+                        loadWindows();
+                    });
+                }
 
                 actions.appendChild(focus);
-                actions.appendChild(toggle);
+                if (toggle) {
+                    actions.appendChild(toggle);
+                }
 
                 row.appendChild(info);
                 row.appendChild(actions);

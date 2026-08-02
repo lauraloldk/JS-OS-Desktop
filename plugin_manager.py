@@ -396,6 +396,31 @@ def list_packages():
     return results
 
 
+def _find_package_by_id(package_id):
+    package_key = str(package_id or '').strip()
+    if not package_key:
+        raise ValueError('Package id is required')
+
+    packages_dir = _paths['packages_dir']
+    if not os.path.isdir(packages_dir):
+        raise FileNotFoundError('No packages directory found')
+
+    for name in sorted(os.listdir(packages_dir), key=lambda value: value.lower()):
+        package_dir = os.path.join(packages_dir, name)
+        if not os.path.isdir(package_dir):
+            continue
+
+        try:
+            found_dir, manifest = _read_package_manifest(name)
+        except Exception:
+            continue
+
+        if manifest.get('id') == package_key:
+            return found_dir, manifest
+
+    raise FileNotFoundError(f'Package not found: {package_key}')
+
+
 def _copy_tree(src_dir, dest_dir):
     for root, dirs, files in os.walk(src_dir):
         dirs[:] = [d for d in dirs if d != '__pycache__']
@@ -471,6 +496,47 @@ def install_package(package_id, update=False):
     }
 
 
+def uninstall_package(package_id):
+    _ensure_initialized()
+
+    package_dir, manifest = _find_package_by_id(package_id)
+    registry = _load_registry()
+    installed = registry.get('packages', {})
+    package_state = installed.get(manifest['id'])
+    if not isinstance(package_state, dict) or not package_state.get('version'):
+        raise ValueError(f'Package is not installed: {manifest["id"]}')
+
+    removed = []
+    for item in manifest['install']:
+        if not isinstance(item, dict):
+            continue
+
+        dst_rel = item.get('to')
+        if not dst_rel:
+            continue
+
+        target = _resolve_inside(_paths['base_dir'], str(dst_rel))
+        if os.path.isdir(target):
+            shutil.rmtree(target)
+            removed.append(str(dst_rel))
+            continue
+
+        if os.path.isfile(target):
+            os.remove(target)
+            removed.append(str(dst_rel))
+
+    installed.pop(manifest['id'], None)
+    registry['packages'] = installed
+    _save_registry()
+
+    _reload_plugins()
+
+    return {
+        'id': manifest['id'],
+        'removed': removed
+    }
+
+
 def call_hook(hook_name, *args):
     plugins = _get_plugins()
 
@@ -518,3 +584,34 @@ def collect_ui_extensions(target, payload):
             extensions.extend([item for item in result if isinstance(item, dict)])
 
     return extensions
+
+
+def execute_plugin_action(action_id, payload):
+    plugins = _get_plugins()
+
+    context = {
+        'base_dir': _paths['base_dir'],
+        'files_root': _paths['files_root'],
+        **_runtime_context
+    }
+
+    request_payload = payload if isinstance(payload, dict) else {}
+    action_key = str(action_id or '').strip()
+    if not action_key:
+        raise ValueError('Action id is required')
+
+    for plugin in plugins:
+        if not plugin['enabled']:
+            continue
+
+        hook = getattr(plugin['module'], 'execute_plugin_action', None)
+        if not callable(hook):
+            continue
+
+        result = hook(action_key, request_payload, context)
+        if result is not None:
+            if isinstance(result, dict):
+                return result
+            return {'status': 'success', 'result': result}
+
+    raise ValueError(f'No plugin handled action: {action_key}')

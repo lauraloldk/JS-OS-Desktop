@@ -1,0 +1,15 @@
+{
+  "id": "quicknotes",
+  "name": "Quick Notes Package",
+  "version": "1.0.0",
+  "install": [
+    {
+      "from": "payload/apps/quicknotes",
+      "to": "apps/quicknotes"
+    },
+    {
+      "from": "payload/plugins/quicknotes_plugin.py",
+      "to": "plugins/quicknotes_plugin.py"
+    }
+  ]
+}
