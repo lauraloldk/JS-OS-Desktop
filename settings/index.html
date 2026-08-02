@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Settings</title>
+    <script>
+        const start_titel = 'Settings';
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(180deg, #f6f8fb 0%, #eaf0f7 100%);
+        }
+
+        .settings-container {
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        .settings-layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 18px;
+        }
+
+        .left-rail {
+            display: grid;
+            gap: 12px;
+            align-content: start;
+        }
+
+        @media (max-width: 700px) {
+            .settings-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: #fff;
+            border-radius: 10px;
+            border: 1px solid #d8e2ef;
+            box-shadow: 0 6px 18px rgba(26, 45, 66, 0.08);
+            overflow: hidden;
+        }
+
+        .panel-header {
+            background: #ecf2f9;
+            border-bottom: 1px solid #d8e2ef;
+            padding: 12px 14px;
+            font-weight: bold;
+        }
+
+        .panel-body {
+            padding: 14px;
+        }
+
+        #settingsFiles {
+            display: grid;
+            gap: 8px;
+        }
+
+        #settingsCategories {
+            display: grid;
+            gap: 8px;
+        }
+
+        .file-item {
+            border: 1px solid #d8e2ef;
+            background: #fff;
+            border-radius: 8px;
+            padding: 9px 10px;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .file-item.active {
+            border-color: #3a7cc4;
+            background: #eaf4ff;
+        }
+
+        .category-group {
+            border: 1px solid #d8e2ef;
+            border-radius: 8px;
+            background: #f9fbfe;
+            padding: 8px;
+        }
+
+        .category-title {
+            margin: 0 0 6px;
+            font-size: 13px;
+            color: #425972;
+            font-weight: 700;
+        }
+
+        .category-item {
+            border: 1px solid #d8e2ef;
+            background: #fff;
+            border-radius: 8px;
+            padding: 8px 10px;
+            text-align: left;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .category-item.sub {
+            margin-top: 6px;
+            margin-left: 10px;
+            width: calc(100% - 10px);
+        }
+
+        .category-item.active {
+            border-color: #3a7cc4;
+            background: #eaf4ff;
+            font-weight: 600;
+        }
+
+        .settings-grid {
+            display: grid;
+            gap: 12px;
+        }
+
+        .field {
+            border-bottom: 1px solid #eef2f6;
+            padding-bottom: 12px;
+        }
+
+        .field:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .field label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .field small {
+            display: block;
+            color: #667a93;
+            margin-top: 4px;
+        }
+
+        .field input,
+        .field textarea,
+        .field select {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #c9d5e5;
+            border-radius: 8px;
+            padding: 9px 10px;
+            font-family: inherit;
+            font-size: 14px;
+            background: #fff;
+        }
+
+        .field input[type="color"] {
+            height: 44px;
+            padding: 4px;
+            min-width: 140px;
+            cursor: pointer;
+        }
+
+        .field textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .field.bool-field {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .field.bool-field input {
+            width: auto;
+        }
+
+        .actions {
+            margin-top: 14px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .button {
+            border: 1px solid #2f6eb2;
+            border-radius: 8px;
+            background: #3a7cc4;
+            color: #fff;
+            padding: 9px 13px;
+            cursor: pointer;
+        }
+
+        .button.secondary {
+            border-color: #b8c7da;
+            background: #fff;
+            color: #2f4158;
+        }
+
+        #status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        #status.success {
+            display: block;
+            background: #e8faed;
+            border: 1px solid #b8e6c3;
+            color: #1d6f2f;
+        }
+
+        #status.error {
+            display: block;
+            background: #fff1f1;
+            border: 1px solid #efc6c6;
+            color: #922828;
+        }
+
+        #emptyState {
+            color: #5c6f88;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="settings-container">
+        <h1>Settings Manager</h1>
+
+        <div class="settings-layout">
+            <div class="left-rail">
+                <div class="panel">
+                    <div class="panel-header">Config Files</div>
+                    <div class="panel-body">
+                        <div id="settingsFiles"></div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">Categories</div>
+                    <div class="panel-body">
+                        <div id="settingsCategories">
+                            <div id="emptyState">Select a settings file to load categories.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header" id="editorHeader">No file selected</div>
+                <div class="panel-body">
+                    <div id="settingsEditor" class="settings-grid">
+                        <div id="emptyState">Select a settings JSON file to edit values.</div>
+                    </div>
+                    <div class="actions">
+                        <button id="saveButton" class="button" disabled>Save</button>
+                        <button id="reloadButton" class="button secondary" disabled>Reload</button>
+                    </div>
+                    <div id="status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="settingsmanager.js"></script>
+</body>
+</html>

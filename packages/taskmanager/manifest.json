@@ -1,0 +1,15 @@
+{
+  "id": "taskmanager",
+  "name": "Task Manager Package",
+  "version": "1.0.0",
+  "install": [
+    {
+      "from": "payload/apps/taskmanager",
+      "to": "apps/taskmanager"
+    },
+    {
+      "from": "payload/plugins/taskmanager_plugin.py",
+      "to": "plugins/taskmanager_plugin.py"
+    }
+  ]
+}

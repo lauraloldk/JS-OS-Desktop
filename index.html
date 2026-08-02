@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JS OS Desktop</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #canvas {
+            width: 100%;
+            height: calc(100vh - 50px); /* Subtract the height of the taskbar from the viewport height */
+            background-color: #f2f2f2;
+        }
+
+        #taskbar {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            height: 50px;
+            background-color: #f2f2f2;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+
+        #startButton, #runAppButton, #settingsButton {
+            height: 36px;
+            margin-right: 10px;
+            padding: 0 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #fff;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        #startButton:hover, #runAppButton:hover, #settingsButton:hover {
+            background-color: #f0f0f0;
+        }
+
+        #appPicker {
+            height: 36px;
+            margin-right: 10px;
+            padding: 0 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            flex-grow: 1;
+            max-width: 180px;
+        }
+
+        #clock {
+            margin-left: auto;
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+            padding: 0 10px;
+            white-space: nowrap;
+            min-width: 60px;
+        }
+
+        .window {
+            position: absolute;
+            width: 600px;
+            height: 400px;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            top: 50px;
+            left: 50px;
+            overflow: hidden;
+        }
+
+        .window-header {
+            height: 30px;
+            background-color: #f0f0f0;
+            border-bottom: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            cursor: move;
+            user-select: none;
+        }
+
+        .window-title {
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 5px;
+        }
+
+        .window-close, .window-minimize, .help, .add-shortcut, .window-set-default-size {
+            width: 20px;
+            height: 20px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .window-close {
+            background-color: #ff5f57;
+            color: white;
+        }
+
+        .help {
+            background-color: #007acc;
+            color: white;
+        }
+
+        .window-minimize {
+            background-color: #ffbd2f;
+            color: #333;
+            font-weight: bold;
+        }
+
+        .add-shortcut,
+        .window-set-default-size {
+            width: auto;
+            padding: 0 6px;
+            font-size: 11px;
+            background: #e9eff8;
+            color: #20384d;
+            border: 1px solid #c3d2e6;
+        }
+
+        .window-close:hover {
+            background-color: #ff3b30;
+        }
+
+        .help:hover {
+            background-color: #005a9e;
+        }
+
+        .window-minimize:hover {
+            background-color: #e0a321;
+        }
+
+        .add-shortcut:hover,
+        .window-set-default-size:hover {
+            background: #dce8f7;
+        }
+
+        .window-content {
+            width: 100%;
+            height: calc(100% - 31px);
+            border: none;
+        }
+
+        .window-active {
+            box-shadow: 0 8px 22px rgba(0,0,0,0.28);
+        }
+
+        .window-resizer {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            width: 14px;
+            height: 14px;
+            cursor: nwse-resize;
+            background: linear-gradient(135deg, transparent 0%, transparent 45%, #888 45%, #888 100%);
+        }
+    </style>
+
+    <script src="window.js"></script>
+</head>
+<body>
+    <div id="canvas"></div>
+
+    <div id="taskbar">
+        <button id="startButton">Start</button>
+        <input type="text" id="appPicker" placeholder="Command or app name">
+        <button id="runAppButton">Run</button>
+        <button id="settingsButton">Settings</button>
+        <span id="clock"></span>
+    </div>
+
+    <script src="shortcuts.js"></script>
+    <script src="dialogs.js"></script>
+    <script src="plugins-bridge.js"></script>
+    <script src="cmd/core.js"></script>
+    <script src="cmd/openin.js"></script>
+    <script src="cmd/apps.js"></script>
+    <script src="desktop.js"></script>
+    <script src="taskbar.js"></script>
+</body>
+</html>

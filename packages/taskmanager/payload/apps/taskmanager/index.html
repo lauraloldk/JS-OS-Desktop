@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task Manager</title>
+    <script>
+        const start_titel = 'Task Manager';
+    </script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Segoe UI, sans-serif;
+            background: #f3f7fb;
+            color: #1f2b38;
+        }
+
+        .wrap {
+            padding: 14px;
+            display: grid;
+            gap: 10px;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .bar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        button {
+            border: 1px solid #b7c6d8;
+            background: #fff;
+            border-radius: 8px;
+            padding: 8px 10px;
+            cursor: pointer;
+        }
+
+        .list {
+            border: 1px solid #d3deea;
+            border-radius: 10px;
+            background: #fff;
+            overflow: auto;
+        }
+
+        .item {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            align-items: center;
+            padding: 10px 12px;
+            border-bottom: 1px solid #eef2f7;
+        }
+
+        .item:last-child {
+            border-bottom: none;
+        }
+
+        .meta {
+            font-size: 12px;
+            color: #617387;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="bar">
+            <button id="refreshButton">Refresh</button>
+        </div>
+        <div id="list" class="list"></div>
+    </div>
+
+    <script>
+        async function loadWindows() {
+            const container = document.getElementById('list');
+            container.innerHTML = '';
+
+            const api = window.parent && window.parent.JSOSWindows;
+            if (!api || typeof api.list !== 'function') {
+                container.textContent = 'Window API not available.';
+                return;
+            }
+
+            const windows = api.list();
+            if (!windows.length) {
+                container.textContent = 'No open windows.';
+                return;
+            }
+
+            windows.forEach((item) => {
+                const row = document.createElement('div');
+                row.className = 'item';
+
+                const info = document.createElement('div');
+                info.innerHTML = `<div>${item.title || item.id}</div><div class="meta">${item.id} | ${item.minimized ? 'minimized' : 'visible'}</div>`;
+
+                const actions = document.createElement('div');
+                const focus = document.createElement('button');
+                focus.textContent = 'Focus';
+                focus.addEventListener('click', () => {
+                    api.focusWindow(item.id);
+                    loadWindows();
+                });
+
+                const toggle = document.createElement('button');
+                toggle.textContent = item.minimized ? 'Restore' : 'Minimize';
+                toggle.addEventListener('click', () => {
+                    api.toggleMinimize(item.id);
+                    loadWindows();
+                });
+
+                actions.appendChild(focus);
+                actions.appendChild(toggle);
+
+                row.appendChild(info);
+                row.appendChild(actions);
+                container.appendChild(row);
+            });
+        }
+
+        document.getElementById('refreshButton').addEventListener('click', loadWindows);
+        loadWindows();
+    </script>
+</body>
+</html>

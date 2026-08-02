@@ -1,0 +1,31 @@
+{
+  "plugins": {
+    "core_system": {
+      "enabled": true,
+      "required": true,
+      "name": "Core System Plugin",
+      "version": "1.0.0",
+      "source": "builtin"
+    },
+    "zip": {
+      "enabled": true,
+      "required": false,
+      "name": "ZIP Filesystem Support",
+      "version": "1.0.0",
+      "source": "builtin"
+    },
+    "taskmanager": {
+      "enabled": false,
+      "required": false,
+      "name": "Task Manager Integration",
+      "version": "1.0.0",
+      "source": "builtin"
+    }
+  },
+  "packages": {
+    "taskmanager": {
+      "version": "1.0.0",
+      "updatedAt": 1785688791
+    }
+  }
+}

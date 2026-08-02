@@ -1,0 +1,23 @@
+{
+  "settings": {
+    "windowSizes": {
+      "apps/jsexplorer/index.html": {
+        "width": 831,
+        "height": 578
+      },
+      "settings/index.html": {
+        "width": 1006,
+        "height": 602
+      }
+    }
+  },
+  "settingsMeta": {
+    "windowSizes": {
+      "label": "Window Sizes",
+      "type": "json",
+      "category": "Windows",
+      "subcategory": "Sizes",
+      "description": "Saved default window sizes per app or window URL."
+    }
+  }
+}

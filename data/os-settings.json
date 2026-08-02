@@ -1,0 +1,22 @@
+{
+  "settings": {
+    "desktopcolor": "#3ea2bb",
+    "taskbarcolor": "#8d69c3"
+  },
+  "settingsMeta": {
+    "desktopcolor": {
+      "label": "Desktop Color",
+      "type": "color",
+      "category": "Desktop",
+      "subcategory": "Design",
+      "description": "Background color for the desktop area."
+    },
+    "taskbarcolor": {
+      "label": "Taskbar Color",
+      "type": "color",
+      "category": "Desktop",
+      "subcategory": "Design",
+      "description": "Background color for the taskbar."
+    }
+  }
+}

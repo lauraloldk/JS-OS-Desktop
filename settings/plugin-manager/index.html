@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Plugin Manager</title>
+    <script>
+        const start_titel = 'Plugin Manager';
+    </script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Segoe UI, sans-serif;
+            background: linear-gradient(180deg, #f8fbff 0%, #ecf2fb 100%);
+            color: #1b2b40;
+        }
+
+        .layout {
+            padding: 14px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            box-sizing: border-box;
+            height: 100vh;
+        }
+
+        .panel {
+            background: #fff;
+            border: 1px solid #d5e0ee;
+            border-radius: 10px;
+            box-shadow: 0 5px 18px rgba(20, 40, 65, 0.08);
+            display: grid;
+            grid-template-rows: auto 1fr;
+            overflow: hidden;
+        }
+
+        .head {
+            background: #eef4fb;
+            border-bottom: 1px solid #d5e0ee;
+            padding: 10px 12px;
+            font-weight: 700;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .list {
+            overflow: auto;
+            padding: 8px;
+            display: grid;
+            gap: 8px;
+            align-content: start;
+        }
+
+        .item {
+            border: 1px solid #d7e2ef;
+            border-radius: 8px;
+            background: #fff;
+            padding: 9px;
+            display: grid;
+            gap: 6px;
+        }
+
+        .meta {
+            font-size: 12px;
+            color: #597089;
+        }
+
+        .deps {
+            display: grid;
+            gap: 4px;
+            font-size: 12px;
+            color: #4d6278;
+            background: #f8fbff;
+            border: 1px solid #dbe7f4;
+            border-radius: 8px;
+            padding: 8px;
+        }
+
+        .dep-ok {
+            color: #1f7a39;
+        }
+
+        .dep-warn {
+            color: #97691c;
+        }
+
+        .dep-bad {
+            color: #9a2b2b;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            border: 1px solid #b9cbe0;
+            background: #fff;
+            border-radius: 8px;
+            padding: 7px 10px;
+            cursor: pointer;
+        }
+
+        button.primary {
+            border-color: #3a7cc4;
+            background: #3a7cc4;
+            color: #fff;
+        }
+
+        #status {
+            position: fixed;
+            left: 12px;
+            bottom: 12px;
+            background: rgba(24, 36, 52, 0.9);
+            color: #fff;
+            padding: 8px 10px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        @media (max-width: 900px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <div class="panel">
+            <div class="head">
+                <span>Plugins</span>
+                <button id="reloadPlugins">Reload</button>
+            </div>
+            <div id="pluginsList" class="list"></div>
+        </div>
+
+        <div class="panel">
+            <div class="head">
+                <span>Packages</span>
+                <button id="reloadPackages">Reload</button>
+            </div>
+            <div id="packagesList" class="list"></div>
+        </div>
+    </div>
+
+    <div id="status"></div>
+
+    <script>
+        async function apiGet(url) {
+            const response = await fetch(url, { cache: 'no-store' });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || payload.message || `Request failed (${response.status})`);
+            }
+            return payload;
+        }
+
+        async function apiPost(url, body) {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body || {})
+            });
+            const payload = await response.json();
+            if (!response.ok || payload.status === 'error') {
+                throw new Error(payload.error || payload.message || `Request failed (${response.status})`);
+            }
+            return payload;
+        }
+
+        function showStatus(message) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.style.display = 'block';
+            clearTimeout(showStatus.timer);
+            showStatus.timer = setTimeout(() => {
+                status.style.display = 'none';
+            }, 2200);
+        }
+
+        function renderDependencyText(title, deps, soft) {
+            if (!Array.isArray(deps) || !deps.length) {
+                return `${title}: none`;
+            }
+
+            const formatted = deps.map((dep) => {
+                if (!dep || !dep.id) {
+                    return 'unknown';
+                }
+
+                if (!dep.found) {
+                    return `${dep.id} (missing)`;
+                }
+
+                if (dep.enabled) {
+                    return `${dep.id} (on)`;
+                }
+
+                return `${dep.id} (${soft ? 'off, optional bonus' : 'off'})`;
+            });
+
+            return `${title}: ${formatted.join(', ')}`;
+        }
+
+        function getDependencyClass(deps, soft) {
+            if (!Array.isArray(deps) || !deps.length) {
+                return 'dep-ok';
+            }
+
+            let hasMissing = false;
+            let hasDisabled = false;
+
+            deps.forEach((dep) => {
+                if (!dep || !dep.id) {
+                    return;
+                }
+                if (!dep.found) {
+                    hasMissing = true;
+                    return;
+                }
+                if (!dep.enabled) {
+                    hasDisabled = true;
+                }
+            });
+
+            if (hasMissing) {
+                return soft ? 'dep-warn' : 'dep-bad';
+            }
+            if (hasDisabled) {
+                return soft ? 'dep-warn' : 'dep-bad';
+            }
+            return 'dep-ok';
+        }
+
+        async function renderPlugins() {
+            const container = document.getElementById('pluginsList');
+            container.innerHTML = '';
+            const payload = await apiGet('../../plugins/list');
+            const plugins = Array.isArray(payload.plugins) ? payload.plugins : [];
+
+            if (!plugins.length) {
+                container.textContent = 'No plugins discovered.';
+                return;
+            }
+
+            plugins.forEach((plugin) => {
+                const card = document.createElement('div');
+                card.className = 'item';
+
+                const title = document.createElement('strong');
+                title.textContent = `${plugin.name} (${plugin.id})`;
+
+                const meta = document.createElement('div');
+                meta.className = 'meta';
+                meta.textContent = `Version ${plugin.version} | ${plugin.required ? 'Required' : 'Optional'} | Default ${plugin.defaultEnabled ? 'On' : 'Off'}`;
+
+                const deps = document.createElement('div');
+                deps.className = 'deps';
+
+                const reqDepLine = document.createElement('div');
+                reqDepLine.className = getDependencyClass(plugin.requiredDependencies, false);
+                reqDepLine.textContent = renderDependencyText('Required deps', plugin.requiredDependencies, false);
+
+                const optDepLine = document.createElement('div');
+                optDepLine.className = getDependencyClass(plugin.optionalDependencies, true);
+                optDepLine.textContent = renderDependencyText('Better with', plugin.optionalDependencies, true);
+
+                deps.appendChild(reqDepLine);
+                deps.appendChild(optDepLine);
+
+                const row = document.createElement('div');
+                row.className = 'row';
+
+                const stateButton = document.createElement('button');
+                stateButton.textContent = plugin.enabled ? 'Disable' : 'Enable';
+                stateButton.disabled = !!plugin.required;
+                stateButton.addEventListener('click', async () => {
+                    await apiPost('../../plugins/enable', { id: plugin.id, enabled: !plugin.enabled });
+                    showStatus(`${plugin.id} updated`);
+                    await renderPlugins();
+                });
+
+                row.appendChild(stateButton);
+                card.appendChild(title);
+                card.appendChild(meta);
+                card.appendChild(deps);
+                card.appendChild(row);
+                container.appendChild(card);
+            });
+        }
+
+        async function renderPackages() {
+            const container = document.getElementById('packagesList');
+            container.innerHTML = '';
+            const payload = await apiGet('../../plugins/packages');
+            const packages = Array.isArray(payload.packages) ? payload.packages : [];
+
+            if (!packages.length) {
+                container.textContent = 'No packages found in packages/.';
+                return;
+            }
+
+            packages.forEach((pkg) => {
+                const card = document.createElement('div');
+                card.className = 'item';
+
+                const title = document.createElement('strong');
+                title.textContent = `${pkg.name} (${pkg.id})`;
+
+                const meta = document.createElement('div');
+                meta.className = 'meta';
+                meta.textContent = `Available ${pkg.version} | Installed ${pkg.installedVersion || 'none'}`;
+
+                const row = document.createElement('div');
+                row.className = 'row';
+
+                const install = document.createElement('button');
+                install.className = 'primary';
+                install.textContent = pkg.isInstalled ? 'Reinstall blocked' : 'Install';
+                install.disabled = !!pkg.isInstalled;
+                install.addEventListener('click', async () => {
+                    await apiPost('../../plugins/install', { packageId: pkg.id });
+                    showStatus(`${pkg.id} installed`);
+                    await renderPackages();
+                    await renderPlugins();
+                });
+
+                const update = document.createElement('button');
+                update.textContent = 'Update';
+                update.disabled = !pkg.isInstalled;
+                update.addEventListener('click', async () => {
+                    await apiPost('../../plugins/update', { packageId: pkg.id });
+                    showStatus(`${pkg.id} updated`);
+                    await renderPackages();
+                    await renderPlugins();
+                });
+
+                row.appendChild(install);
+                row.appendChild(update);
+                card.appendChild(title);
+                card.appendChild(meta);
+                card.appendChild(row);
+                container.appendChild(card);
+            });
+        }
+
+        async function init() {
+            document.getElementById('reloadPlugins').addEventListener('click', () => renderPlugins().catch((error) => alert(error.message)));
+            document.getElementById('reloadPackages').addEventListener('click', () => renderPackages().catch((error) => alert(error.message)));
+
+            await renderPlugins();
+            await renderPackages();
+        }
+
+        init().catch((error) => alert(error.message));
+    </script>
+</body>
+</html>
