@@ -63,7 +63,7 @@
       ]
     },
     "devtools": {
-      "enabled": false,
+      "enabled": true,
       "required": false,
       "name": "Developer Tools",
       "version": "1.0.0",
@@ -79,7 +79,23 @@
       "source": "builtin",
       "requiredDependencies": [],
       "optionalDependencies": []
+    },
+    "webapphub": {
+      "enabled": true,
+      "required": false,
+      "name": "WebApp Hub",
+      "version": "1.0.0",
+      "source": "builtin",
+      "requiredDependencies": [],
+      "optionalDependencies": [
+        "devtools"
+      ]
     }
   },
-  "packages": {}
+  "packages": {
+    "webapphub": {
+      "version": "1.0.0",
+      "updatedAt": 1785710388
+    }
+  }
 }

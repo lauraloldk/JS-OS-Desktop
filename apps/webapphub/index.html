@@ -170,26 +170,6 @@
 
     <script>
         const EXECUTE_ENDPOINT = '../../plugins/execute';
-        const ENABLE_ENDPOINT = '../../plugins/enable';
-        let ensureEnabledAttempted = false;
-
-        async function ensurePluginEnabled() {
-            if (ensureEnabledAttempted) {
-                return;
-            }
-
-            ensureEnabledAttempted = true;
-            const response = await fetch(ENABLE_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: 'webapphub', enabled: true })
-            });
-
-            const data = await response.json();
-            if (!response.ok || data.status === 'error') {
-                throw new Error(data.message || data.error || `Failed to enable plugin (${response.status})`);
-            }
-        }
 
         function showStatus(message) {
             const node = document.getElementById('status');
@@ -202,30 +182,17 @@
         }
 
         async function pluginAction(actionId, payload) {
-            const request = async function() {
-                const response = await fetch(EXECUTE_ENDPOINT, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ actionId: actionId, payload: payload || {} })
-                });
+            const response = await fetch(EXECUTE_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ actionId: actionId, payload: payload || {} })
+            });
 
-                const data = await response.json();
-                if (!response.ok || data.status === 'error') {
-                    throw new Error(data.message || data.error || `Action failed (${response.status})`);
-                }
-                return data;
-            };
-
-            try {
-                return await request();
-            } catch (error) {
-                const message = String(error && error.message ? error.message : error);
-                if (message.toLowerCase().includes('no plugin handled action: webapphub')) {
-                    await ensurePluginEnabled();
-                    return request();
-                }
-                throw error;
+            const data = await response.json();
+            if (!response.ok || data.status === 'error') {
+                throw new Error(data.message || data.error || `Action failed (${response.status})`);
             }
+            return data;
         }
 
         function createRepoCard(item) {
