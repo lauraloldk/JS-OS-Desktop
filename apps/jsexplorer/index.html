@@ -15,7 +15,7 @@
 
         .explorer {
             display: grid;
-            grid-template-rows: auto auto 1fr;
+            grid-template-rows: auto auto auto 1fr auto;
             height: 100vh;
         }
 
@@ -63,12 +63,39 @@
             overflow: auto;
         }
 
+        .delete-controls {
+            display: flex;
+            gap: 8px;
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.62);
+        }
+
+        .delete-controls.bottom {
+            border-top: 1px solid rgba(0, 0, 0, 0.08);
+            border-bottom: 0;
+        }
+
+        .delete-controls.hidden {
+            display: none;
+        }
+
+        .delete-mode-badge {
+            margin-left: auto;
+            font-size: 12px;
+            color: #675846;
+            align-self: center;
+        }
+
         .entry {
             border: 1px solid rgba(0, 0, 0, 0.08);
             border-radius: 12px;
             background: rgba(255, 255, 255, 0.72);
             padding: 10px 12px;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .entry:hover,
@@ -85,6 +112,16 @@
             font-size: 12px;
             color: #675846;
             margin-top: 4px;
+        }
+
+        .entry-main {
+            min-width: 0;
+        }
+
+        .entry-delete-checkbox {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
         }
 
         .status {
@@ -133,12 +170,22 @@
             <button id="newFolderButton">New Folder</button>
             <button id="openButton">Open</button>
             <button id="openNotepadButton">Open In Notepad</button>
+            <button id="deleteFilesButton">Delete Files</button>
             <div id="pluginToolbar" class="plugin-toolbar"></div>
         </div>
         <div class="pathbar">
             <input id="pathInput" type="text" value="" readonly>
         </div>
+        <div id="deleteTopControls" class="delete-controls hidden">
+            <button id="selectAllDeleteButton">Select all</button>
+            <button id="unselectAllDeleteButton">Unselect all</button>
+            <span class="delete-mode-badge">Delete mode</span>
+        </div>
         <div id="listing" class="listing"></div>
+        <div id="deleteBottomControls" class="delete-controls bottom hidden">
+            <button id="confirmDeleteSelectedButton">Delete selected files</button>
+            <button id="cancelDeleteModeButton">Cancel delete-mode</button>
+        </div>
     </div>
     <div id="status" class="status"></div>
     <div id="menu" class="menu"></div>
@@ -152,6 +199,9 @@
         let currentPath = '';
         let selectedEntry = null;
         let preselectedName = '';
+        let currentEntries = [];
+        let isDeleteMode = false;
+        let deleteSelection = new Set();
 
         async function renderPluginExtensions() {
             const container = document.getElementById('pluginToolbar');
@@ -233,16 +283,75 @@
             return data;
         }
 
-        async function loadListing(path) {
-            const listing = await fetchListing(path);
-            currentPath = listing.path;
-            selectedEntry = null;
-            document.getElementById('pathInput').value = currentPath || '/';
+        function updateDeleteModeUi() {
+            const top = document.getElementById('deleteTopControls');
+            const bottom = document.getElementById('deleteBottomControls');
+            top.classList.toggle('hidden', !isDeleteMode);
+            bottom.classList.toggle('hidden', !isDeleteMode);
+        }
 
+        function getFileEntries() {
+            return (currentEntries || []).filter((entry) => entry && entry.type === 'file');
+        }
+
+        function setDeleteMode(enabled) {
+            isDeleteMode = !!enabled;
+            if (!isDeleteMode) {
+                deleteSelection = new Set();
+            }
+            selectedEntry = null;
+            updateDeleteModeUi();
+            renderEntries();
+        }
+
+        function toggleDeleteSelection(path, checked) {
+            if (!path) {
+                return;
+            }
+
+            if (checked) {
+                deleteSelection.add(path);
+            } else {
+                deleteSelection.delete(path);
+            }
+        }
+
+        function selectAllFiles() {
+            deleteSelection = new Set(getFileEntries().map((entry) => entry.path));
+            renderEntries();
+        }
+
+        function unselectAllFiles() {
+            deleteSelection = new Set();
+            renderEntries();
+        }
+
+        async function deleteSelectedFiles() {
+            const selectedPaths = Array.from(deleteSelection);
+            if (!selectedPaths.length) {
+                alert('No files selected');
+                return;
+            }
+
+            const ok = window.confirm(`Delete ${selectedPaths.length} selected file(s)?`);
+            if (!ok) {
+                return;
+            }
+
+            for (const filePath of selectedPaths) {
+                await executeAction('jsexplorer.delete_file', { filePath: filePath });
+            }
+
+            showStatus(`Deleted ${selectedPaths.length} file(s)`);
+            setDeleteMode(false);
+            await loadListing(currentPath);
+        }
+
+        function renderEntries() {
             const container = document.getElementById('listing');
             container.innerHTML = '';
 
-            if (!listing.entries.length) {
+            if (!currentEntries.length) {
                 const empty = document.createElement('div');
                 empty.className = 'entry';
                 empty.textContent = 'Folder is empty';
@@ -250,9 +359,24 @@
                 return;
             }
 
-            listing.entries.forEach((entry) => {
+            currentEntries.forEach((entry) => {
                 const item = document.createElement('div');
                 item.className = 'entry';
+
+                if (isDeleteMode && entry.type === 'file') {
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'entry-delete-checkbox';
+                    checkbox.checked = deleteSelection.has(entry.path);
+                    checkbox.addEventListener('click', (event) => event.stopPropagation());
+                    checkbox.addEventListener('change', (event) => {
+                        toggleDeleteSelection(entry.path, event.target.checked);
+                    });
+                    item.appendChild(checkbox);
+                }
+
+                const main = document.createElement('div');
+                main.className = 'entry-main';
 
                 const name = document.createElement('div');
                 name.className = 'entry-name';
@@ -262,31 +386,51 @@
                 meta.className = 'entry-meta';
                 meta.textContent = entry.type;
 
-                item.appendChild(name);
-                item.appendChild(meta);
+                main.appendChild(name);
+                main.appendChild(meta);
+                item.appendChild(main);
 
                 if (preselectedName && entry.name === preselectedName) {
                     item.classList.add('active');
                     selectedEntry = entry;
                 }
 
-                item.addEventListener('click', () => {
-                    document.querySelectorAll('.entry').forEach((node) => node.classList.remove('active'));
-                    item.classList.add('active');
-                    selectedEntry = entry;
-                });
-                item.addEventListener('dblclick', () => {
-                    openEntry(entry);
-                });
-                item.addEventListener('contextmenu', async (event) => {
-                    event.preventDefault();
-                    selectedEntry = entry;
-                    document.querySelectorAll('.entry').forEach((node) => node.classList.remove('active'));
-                    item.classList.add('active');
-                    await openContextMenu(event.clientX, event.clientY, entry);
-                });
+                if (!isDeleteMode) {
+                    item.addEventListener('click', () => {
+                        document.querySelectorAll('.entry').forEach((node) => node.classList.remove('active'));
+                        item.classList.add('active');
+                        selectedEntry = entry;
+                    });
+                    item.addEventListener('dblclick', () => {
+                        openEntry(entry);
+                    });
+                    item.addEventListener('contextmenu', async (event) => {
+                        event.preventDefault();
+                        selectedEntry = entry;
+                        document.querySelectorAll('.entry').forEach((node) => node.classList.remove('active'));
+                        item.classList.add('active');
+                        await openContextMenu(event.clientX, event.clientY, entry);
+                    });
+                } else if (entry.type === 'file') {
+                    item.addEventListener('click', () => {
+                        const shouldSelect = !deleteSelection.has(entry.path);
+                        toggleDeleteSelection(entry.path, shouldSelect);
+                        renderEntries();
+                    });
+                }
+
                 container.appendChild(item);
             });
+        }
+
+        async function loadListing(path) {
+            const listing = await fetchListing(path);
+            currentPath = listing.path;
+            selectedEntry = null;
+            currentEntries = Array.isArray(listing.entries) ? listing.entries : [];
+            document.getElementById('pathInput').value = currentPath || '/';
+
+            renderEntries();
 
             preselectedName = '';
             renderPluginExtensions().catch(() => {});
@@ -328,6 +472,16 @@
                             }
                             return;
                         }
+                        if (action.id === 'jsexplorer.delete_file') {
+                            const ok = window.confirm(`Delete file "${entry.name}"?`);
+                            if (!ok) {
+                                return;
+                            }
+                            await executeAction(action.id, { entry: entry, filePath: entry.path, path: currentPath });
+                            await loadListing(currentPath);
+                            showStatus('File deleted');
+                            return;
+                        }
                         await executeAction(action.id, { entry: entry, path: currentPath });
                         await loadListing(currentPath);
                         showStatus(action.label || action.id);
@@ -366,6 +520,13 @@
                 window.parent.createWindow(`Notepad - ${selectedEntry.name}`, `apps/notepad/index.html?path=${encodeURIComponent(selectedEntry.path)}`);
             }
         });
+        document.getElementById('deleteFilesButton').addEventListener('click', () => setDeleteMode(true));
+        document.getElementById('selectAllDeleteButton').addEventListener('click', selectAllFiles);
+        document.getElementById('unselectAllDeleteButton').addEventListener('click', unselectAllFiles);
+        document.getElementById('confirmDeleteSelectedButton').addEventListener('click', () => {
+            deleteSelectedFiles().catch((error) => alert(error.message));
+        });
+        document.getElementById('cancelDeleteModeButton').addEventListener('click', () => setDeleteMode(false));
 
         document.addEventListener('click', () => {
             document.getElementById('menu').style.display = 'none';
