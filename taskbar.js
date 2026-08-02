@@ -319,7 +319,7 @@
         if (!items.length) {
             const empty = document.createElement('div');
             empty.className = 'start-menu-empty';
-            empty.textContent = 'Ingen elementer fundet.';
+            empty.textContent = 'No items found.';
             subMenu.appendChild(empty);
         } else {
             items.forEach(function(item) {
@@ -361,7 +361,7 @@
 
         const appsButton = document.createElement('button');
         appsButton.className = 'start-menu-item';
-        appsButton.textContent = 'Vis Apps';
+        appsButton.textContent = 'Apps';
         appsButton.addEventListener('click', function() {
             openSubMenu('app', 'Apps');
         });
@@ -369,9 +369,9 @@
 
         const settingsButton = document.createElement('button');
         settingsButton.className = 'start-menu-item';
-        settingsButton.textContent = 'Vis Indstillinger';
+        settingsButton.textContent = 'Settings';
         settingsButton.addEventListener('click', function() {
-            openSubMenu('settings', 'Indstillinger');
+            openSubMenu('settings', 'Settings');
         });
         startMenu.appendChild(settingsButton);
 
@@ -393,7 +393,7 @@
         try {
             await fetchStartItems();
         } catch (error) {
-            errorMessage = `Kunne ikke hente startmenu: ${error.message}`;
+            errorMessage = `Could not load start menu: ${error.message}`;
             startItems = [];
         }
 

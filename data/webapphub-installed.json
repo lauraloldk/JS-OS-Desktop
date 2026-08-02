@@ -1,13 +1,3 @@
 {
-  "apps": {
-    "ashrayshetty4-js-canvas": {
-      "slug": "ashrayshetty4-js-canvas",
-      "fullName": "AshrayShetty4/JS-canvas",
-      "branch": "master",
-      "entry": "index.html",
-      "title": "JS-canvas",
-      "appUrl": "apps/webapps/ashrayshetty4-js-canvas/index.html",
-      "installedAt": 1785711154
-    }
-  }
+  "apps": {}
 }
