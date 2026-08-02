@@ -1,13 +1,13 @@
 {
   "apps": {
-    "tuanchauict-monosketch": {
-      "slug": "tuanchauict-monosketch",
-      "fullName": "tuanchauict/MonoSketch",
-      "branch": "main",
-      "entry": "src/main/resources/index.html",
-      "title": "MonoSketch",
-      "appUrl": "apps/webapps/tuanchauict-monosketch/index.html",
-      "installedAt": 1785710614
+    "ashrayshetty4-js-canvas": {
+      "slug": "ashrayshetty4-js-canvas",
+      "fullName": "AshrayShetty4/JS-canvas",
+      "branch": "master",
+      "entry": "index.html",
+      "title": "JS-canvas",
+      "appUrl": "apps/webapps/ashrayshetty4-js-canvas/index.html",
+      "installedAt": 1785711154
     }
   }
 }

@@ -156,6 +156,35 @@ def _read_installed(base_dir):
     return data
 
 
+def _reconcile_installed(base_dir, installed):
+    apps = installed.get('apps', {}) if isinstance(installed, dict) else {}
+    if not isinstance(apps, dict):
+        return installed, 0
+
+    removed = 0
+    for slug in list(apps.keys()):
+        item = apps.get(slug)
+        if not isinstance(item, dict):
+            apps.pop(slug, None)
+            removed += 1
+            continue
+
+        app_url = str(item.get('appUrl') or f'apps/webapps/{slug}/index.html').replace('\\', '/').strip('/')
+        launcher_abs = os.path.abspath(os.path.join(base_dir, app_url))
+        base_abs = os.path.abspath(base_dir)
+        if launcher_abs != base_abs and not launcher_abs.startswith(base_abs + os.sep):
+            apps.pop(slug, None)
+            removed += 1
+            continue
+
+        if not os.path.isfile(launcher_abs):
+            apps.pop(slug, None)
+            removed += 1
+
+    installed['apps'] = apps
+    return installed, removed
+
+
 def _read_ratings(base_dir):
     data = _json_read(_ratings_path(base_dir), {'ratings': {}})
     if not isinstance(data, dict):
@@ -302,6 +331,10 @@ def _install_repository(payload, context):
 def _list_installed(payload, context):
     base_dir = context['base_dir']
     installed = _read_installed(base_dir)
+    installed, removed = _reconcile_installed(base_dir, installed)
+    if removed:
+        _json_write(_installed_path(base_dir), installed)
+
     ratings = _read_ratings(base_dir)
     can_rate = _devtools_enabled(base_dir)
 
@@ -322,7 +355,8 @@ def _list_installed(payload, context):
     return {
         'apps': apps,
         'canRate': can_rate,
-        'allowedRatings': sorted(_ALLOWED_RATINGS)
+        'allowedRatings': sorted(_ALLOWED_RATINGS),
+        'reconciledRemoved': removed
     }
 
 

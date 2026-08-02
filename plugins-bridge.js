@@ -7,6 +7,8 @@
     const BUTTON_ATTR = 'data-jsos-plugin-button-initialized';
     const SMART_DIALOG_ATTR = 'data-jsos-smartdialog-installed';
     const SMART_DIALOG_BYPASS_ATTR = 'data-jsos-smartdialog-bypass';
+    const SMART_DIALOG_INPUT_PATCHED_ATTR = 'data-jsos-smartdialog-input-patched';
+    const SMART_DIALOG_RECURSE_ATTR = 'data-jsos-smartdialog-recursive-installed';
 
     async function getExtensions(target, payload) {
         const query = new URLSearchParams({
@@ -199,15 +201,131 @@
     }
 
     function getDialogsHost(targetWindow) {
-        if (targetWindow.parent && targetWindow.parent !== targetWindow && targetWindow.parent.JSOSDialogsHost) {
-            return targetWindow.parent.JSOSDialogsHost;
-        }
+        let currentWindow = targetWindow;
+        while (currentWindow) {
+            if (currentWindow.JSOSDialogsHost) {
+                return currentWindow.JSOSDialogsHost;
+            }
 
-        if (targetWindow.JSOSDialogsHost) {
-            return targetWindow.JSOSDialogsHost;
+            if (!currentWindow.parent || currentWindow.parent === currentWindow) {
+                break;
+            }
+            currentWindow = currentWindow.parent;
         }
 
         return null;
+    }
+
+    async function pickFileThroughJsos(targetWindow, input) {
+        const dialogsHost = getDialogsHost(targetWindow);
+        if (!dialogsHost || typeof dialogsHost.openFileDialog !== 'function') {
+            throw new Error('JS-OS dialog host is unavailable');
+        }
+
+        const picked = await dialogsHost.openFileDialog({ path: '' });
+        if (!picked || !picked.path) {
+            return;
+        }
+
+        const readResponse = await fetch(`/fs/read?path=${encodeURIComponent(String(picked.path))}`, {
+            cache: 'no-store'
+        });
+        const readPayload = await readResponse.json();
+        if (!readResponse.ok) {
+            throw new Error(readPayload.error || `Failed to read file (${readResponse.status})`);
+        }
+
+        const selectedPath = String(readPayload.path || picked.path || '');
+        const fileName = selectedPath.split('/').pop() || 'file.txt';
+        const file = new targetWindow.File([String(readPayload.content || '')], fileName, {
+            type: 'text/plain'
+        });
+
+        const transfer = new targetWindow.DataTransfer();
+        transfer.items.add(file);
+        input.files = transfer.files;
+        input.dispatchEvent(new targetWindow.Event('change', { bubbles: true }));
+    }
+
+    function patchFileInputClick(targetWindow) {
+        const doc = targetWindow.document;
+        if (!doc || !doc.body || doc.body.getAttribute(SMART_DIALOG_INPUT_PATCHED_ATTR)) {
+            return;
+        }
+
+        const proto = targetWindow.HTMLInputElement && targetWindow.HTMLInputElement.prototype;
+        if (!proto || typeof proto.click !== 'function') {
+            return;
+        }
+
+        const nativeClick = proto.click;
+        proto.click = function patchedSmartDialogClick() {
+            const input = this;
+            const isFileInput = input && String(input.type || '').toLowerCase() === 'file';
+            const hasBridge = doc.body && doc.body.getAttribute(SMART_DIALOG_ATTR) === '1';
+
+            if (!isFileInput || !hasBridge || input.disabled || input.readOnly || input.hasAttribute(SMART_DIALOG_BYPASS_ATTR)) {
+                return nativeClick.apply(input, arguments);
+            }
+
+            (async function() {
+                const mode = await chooseDialogMode(targetWindow, 'Open file');
+                if (!mode) {
+                    return;
+                }
+
+                if (mode === 'system') {
+                    input.setAttribute(SMART_DIALOG_BYPASS_ATTR, '1');
+                    try {
+                        nativeClick.call(input);
+                    } finally {
+                        input.removeAttribute(SMART_DIALOG_BYPASS_ATTR);
+                    }
+                    return;
+                }
+
+                await pickFileThroughJsos(targetWindow, input);
+            })().catch(function(error) {
+                targetWindow.alert(error.message || 'Smart dialog failed');
+            });
+        };
+
+        doc.body.setAttribute(SMART_DIALOG_INPUT_PATCHED_ATTR, '1');
+    }
+
+    function installSmartDialogIntoChildIframes(targetWindow) {
+        const doc = targetWindow.document;
+        if (!doc || !doc.body) {
+            return;
+        }
+
+        if (!doc.body.getAttribute(SMART_DIALOG_RECURSE_ATTR)) {
+            doc.body.setAttribute(SMART_DIALOG_RECURSE_ATTR, '1');
+            doc.addEventListener('load', function(event) {
+                const frame = event.target;
+                if (!frame || frame.tagName !== 'IFRAME') {
+                    return;
+                }
+
+                try {
+                    if (frame.contentWindow) {
+                        installAutoToolbarBridge(frame.contentWindow);
+                    }
+                } catch (error) {
+                    // Ignore cross-origin child frames.
+                }
+            }, true);
+        }
+
+        doc.querySelectorAll('iframe').forEach(function(frame) {
+            try {
+                if (frame.contentWindow) {
+                    installAutoToolbarBridge(frame.contentWindow);
+                }
+            } catch (error) {
+                // Ignore cross-origin child frames.
+            }
+        });
     }
 
     async function chooseDialogMode(targetWindow, operationName) {
@@ -268,7 +386,10 @@
             return;
         }
 
+        patchFileInputClick(targetWindow);
+
         if (doc.body.getAttribute(SMART_DIALOG_ATTR)) {
+            installSmartDialogIntoChildIframes(targetWindow);
             return;
         }
 
@@ -285,6 +406,7 @@
         });
 
         if (!enabled) {
+            installSmartDialogIntoChildIframes(targetWindow);
             return;
         }
 
@@ -316,34 +438,7 @@
                     return;
                 }
 
-                const dialogsHost = getDialogsHost(targetWindow);
-                if (!dialogsHost || typeof dialogsHost.openFileDialog !== 'function') {
-                    throw new Error('JS-OS dialog host is unavailable');
-                }
-
-                const picked = await dialogsHost.openFileDialog({ path: '' });
-                if (!picked || !picked.path) {
-                    return;
-                }
-
-                const readResponse = await fetch(`/fs/read?path=${encodeURIComponent(String(picked.path))}`, {
-                    cache: 'no-store'
-                });
-                const readPayload = await readResponse.json();
-                if (!readResponse.ok) {
-                    throw new Error(readPayload.error || `Failed to read file (${readResponse.status})`);
-                }
-
-                const selectedPath = String(readPayload.path || picked.path || '');
-                const fileName = selectedPath.split('/').pop() || 'file.txt';
-                const file = new targetWindow.File([String(readPayload.content || '')], fileName, {
-                    type: 'text/plain'
-                });
-
-                const transfer = new targetWindow.DataTransfer();
-                transfer.items.add(file);
-                input.files = transfer.files;
-                input.dispatchEvent(new targetWindow.Event('change', { bubbles: true }));
+                await pickFileThroughJsos(targetWindow, input);
             })().catch(function(error) {
                 targetWindow.alert(error.message || 'Smart dialog failed');
             });
@@ -391,7 +486,9 @@
             })().catch(function(error) {
                 targetWindow.alert(error.message || 'Smart dialog failed');
             });
-        }, true);
+        });
+
+        installSmartDialogIntoChildIframes(targetWindow);
     }
 
     async function openPluginMenu(targetWindow, triggerButton) {

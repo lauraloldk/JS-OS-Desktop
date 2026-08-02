@@ -563,8 +563,29 @@
             focusWindowById(windowId);
         });
 
-        windowContent.addEventListener('mousedown', function() {
+        function focusAppContent() {
             focusWindowById(windowId);
+
+            try {
+                if (windowContent && windowContent.contentWindow && typeof windowContent.contentWindow.focus === 'function') {
+                    windowContent.contentWindow.focus();
+                }
+            } catch (error) {
+                // Cross-frame focus issues should not break window interaction.
+            }
+        }
+
+        windowContent.addEventListener('mousedown', function() {
+            focusAppContent();
+        });
+
+        // Make wheel scrolling work without requiring an initial click inside the iframe.
+        windowContent.addEventListener('mouseenter', function() {
+            focusAppContent();
+        });
+
+        windowContent.addEventListener('wheel', function() {
+            focusAppContent();
         });
 
         let initialMouseX = 0;
