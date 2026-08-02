@@ -27,23 +27,32 @@ def _unique_file_name(directory_abs, base_name, extension):
 
 
 def _create_new_text_file(current_path, context):
-    resolve_fs_path = context.get('resolve_fs_path')
-    if not callable(resolve_fs_path):
+    write_fs_file = context.get('write_fs_file')
+    list_fs_entries = context.get('list_fs_entries')
+    read_fs_file = context.get('read_fs_file')
+    if not callable(write_fs_file) or not callable(list_fs_entries) or not callable(read_fs_file):
         raise ValueError('Filesystem context is unavailable')
 
     current_norm = _safe_norm(current_path, context)
-    current_rel, current_abs = resolve_fs_path(current_norm)
-    if not os.path.isdir(current_abs):
-        raise FileNotFoundError(f'Directory not found: {current_rel or "/"}')
+    listing = list_fs_entries(current_norm)
+    if not isinstance(listing, dict):
+        raise FileNotFoundError(f'Directory not found: {current_norm or "/"}')
 
-    file_name = _unique_file_name(current_abs, 'new-file', '.txt')
-    rel = '/'.join(filter(None, [current_rel, file_name]))
-    _, abs_path = resolve_fs_path(rel)
+    base_dir = str(listing.get('path') or current_norm).replace('\\', '/').strip('/')
 
-    with open(abs_path, 'w', encoding='utf-8') as f:
-        f.write('')
+    index = 0
+    while True:
+        suffix = '' if index == 0 else f'-{index}'
+        file_name = f'new-file{suffix}.txt'
+        rel = '/'.join(filter(None, [base_dir, file_name]))
 
-    return rel
+        try:
+            read_fs_file(rel)
+            index += 1
+            continue
+        except FileNotFoundError:
+            write_fs_file(rel, '')
+            return rel
 
 
 def _duplicate_selected_file(selected_path, context):

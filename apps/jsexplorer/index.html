@@ -442,6 +442,22 @@
             currentEntries = Array.isArray(listing.entries) ? listing.entries : [];
             document.getElementById('pathInput').value = currentPath || '/';
 
+            try {
+                if (window.parent && window.parent !== window) {
+                    if (!window.parent.JSOSCmdContext || typeof window.parent.JSOSCmdContext !== 'object') {
+                        window.parent.JSOSCmdContext = {};
+                    }
+                    window.parent.JSOSCmdContext.activeExplorerPath = currentPath || '';
+                    window.parent.JSOSCmdContext.activeExplorerEntries = (currentEntries || []).map((entry) => ({
+                        name: String(entry && entry.name ? entry.name : ''),
+                        path: String(entry && entry.path ? entry.path : ''),
+                        type: String(entry && entry.type ? entry.type : '')
+                    }));
+                }
+            } catch (error) {
+                // Best effort only.
+            }
+
             renderEntries();
 
             preselectedName = '';

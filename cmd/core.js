@@ -2,6 +2,7 @@
     'use strict';
 
     const registry = [];
+    let openInProvider = null;
 
     function stripQuotes(value) {
         const text = String(value || '').trim();
@@ -65,29 +66,6 @@
         return `Opened app ${name}`;
     }
 
-    async function openNotepad(filePath) {
-        const opener = getOpenTarget();
-        if (!opener) {
-            throw new Error('Window system is not available in this context');
-        }
-
-        const cleanPath = normalizePath(stripQuotes(filePath));
-        if (!cleanPath) {
-            throw new Error('Missing file path in command');
-        }
-
-        // Validate target as a readable file so zip-internal paths work and directories fail clearly.
-        try {
-            await requestJson(`/fs/read?path=${encodeURIComponent(cleanPath)}`, { cache: 'no-store' });
-        } catch (error) {
-            throw new Error(`Cannot open file in Notepad: ${cleanPath}`);
-        }
-
-        const fileName = cleanPath.split('/').pop() || cleanPath;
-        opener.createWindow(`Notepad - ${fileName}`, `apps/notepad/index.html?path=${encodeURIComponent(cleanPath)}`);
-        return `Opened ${cleanPath} in Notepad`;
-    }
-
     function openNotepadContent(contentText, titleText) {
         const opener = getOpenTarget();
         if (!opener) {
@@ -105,38 +83,25 @@
         return `Opened ${title}`;
     }
 
-    async function openJSExplorer(targetPath) {
-        const opener = getOpenTarget();
-        if (!opener) {
-            throw new Error('Window system is not available in this context');
+    function setOpenInProvider(provider) {
+        if (provider === null) {
+            openInProvider = null;
+            return;
         }
 
-        const cleanPath = normalizePath(stripQuotes(targetPath));
-        if (!cleanPath) {
-            opener.createWindow('JSExplorer', 'apps/jsexplorer/index.html');
-            return 'Opened JSExplorer';
+        if (!provider || typeof provider.executeOpenIn !== 'function') {
+            throw new Error('Open-in provider must expose executeOpenIn(filePath, appName)');
         }
 
-        try {
-            await requestJson(`/fs/list?path=${encodeURIComponent(cleanPath)}`, { cache: 'no-store' });
-            opener.createWindow('JSExplorer', `apps/jsexplorer/index.html?path=${encodeURIComponent(cleanPath)}`);
-            return `Opened folder ${cleanPath} in JSExplorer`;
-        } catch (dirError) {
-            const fileData = await requestJson(`/fs/read?path=${encodeURIComponent(cleanPath)}`, { cache: 'no-store' });
-            const file = String(fileData.path || cleanPath);
-            const parts = file.split('/').filter(Boolean);
-            const selected = parts.pop() || file;
-            const parentPath = parts.join('/');
+        openInProvider = provider;
+    }
 
-            const query = new URLSearchParams();
-            if (parentPath) {
-                query.set('path', parentPath);
-            }
-            query.set('select', selected);
-
-            opener.createWindow('JSExplorer', `apps/jsexplorer/index.html?${query.toString()}`);
-            return `Opened folder for ${file} in JSExplorer`;
+    async function executeOpenIn(filePath, appName) {
+        if (!openInProvider || typeof openInProvider.executeOpenIn !== 'function') {
+            throw new Error('Open-in command provider is not available');
         }
+
+        return openInProvider.executeOpenIn(filePath, appName);
     }
 
     function register(definition) {
@@ -185,20 +150,6 @@
         }
     });
 
-    async function executeOpenIn(filePath, appName) {
-        const app = String(appName || '').trim().toLowerCase();
-
-        if (app === 'notepad') {
-            return openNotepad(filePath);
-        }
-
-        if (app === 'jsexplorer') {
-            return openJSExplorer(filePath);
-        }
-
-        throw new Error(`Unsupported app: ${app}`);
-    }
-
     async function execute(commandText) {
         const command = String(commandText || '').trim();
         if (!command) {
@@ -210,9 +161,10 @@
             if (match !== null && match !== undefined) {
                 return definition.run(match, {
                     openApp,
-                    openJSExplorer,
-                    openNotepad,
                     executeOpenIn,
+                    requestJson,
+                    getOpenTarget,
+                    stripQuotes,
                     normalizePath
                 });
             }
@@ -225,10 +177,13 @@
         register,
         getCommands,
         openApp,
-        openJSExplorer,
-        openNotepad,
         openNotepadContent,
         executeOpenIn,
+        setOpenInProvider,
+        requestJson,
+        getOpenTarget,
+        stripQuotes,
+        normalizePath,
         execute
     };
 })();

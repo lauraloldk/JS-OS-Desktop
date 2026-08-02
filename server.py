@@ -275,7 +275,12 @@ plugin_manager.initialize(
     files_root,
     runtime_context={
         'resolve_fs_path': resolve_fs_path,
-        'normalize_virtual_path': normalize_virtual_path
+        'normalize_virtual_path': normalize_virtual_path,
+        'list_fs_entries': list_fs_entries,
+        'read_fs_file': read_fs_file,
+        'write_fs_file': write_fs_file,
+        'create_fs_directory': create_fs_directory,
+        'delete_fs_file': delete_fs_file
     }
 )
 
