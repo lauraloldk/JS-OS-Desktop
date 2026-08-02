@@ -1,0 +1,15 @@
+{
+  "id": "webapphub",
+  "name": "WebApp Hub Package",
+  "version": "1.0.0",
+  "install": [
+    {
+      "from": "payload/apps/webapphub",
+      "to": "apps/webapphub"
+    },
+    {
+      "from": "payload/plugins/webapphub_plugin.py",
+      "to": "plugins/webapphub_plugin.py"
+    }
+  ]
+}

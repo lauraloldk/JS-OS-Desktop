@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebApp Hub</title>
+    <script>
+        const start_titel = 'WebApp Hub';
+    </script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Segoe UI, sans-serif;
+            background: linear-gradient(180deg, #f7fafc 0%, #e9f1f8 100%);
+            color: #1d2f44;
+        }
+
+        .layout {
+            height: 100vh;
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            gap: 10px;
+            padding: 12px;
+            box-sizing: border-box;
+        }
+
+        .bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        input, select, textarea, button {
+            border: 1px solid #c6d6e8;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font: inherit;
+            box-sizing: border-box;
+        }
+
+        input[type="text"] {
+            min-width: 260px;
+            background: #fff;
+        }
+
+        button.primary {
+            background: #2f78c5;
+            border-color: #2f78c5;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        button.secondary {
+            background: #fff;
+            color: #2e4f74;
+            cursor: pointer;
+        }
+
+        .panes {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 10px;
+            min-height: 0;
+        }
+
+        .panel {
+            background: #fff;
+            border: 1px solid #d8e2ee;
+            border-radius: 10px;
+            display: grid;
+            grid-template-rows: auto 1fr;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e2e9f2;
+            font-weight: 700;
+            background: #f5f9fd;
+        }
+
+        .panel-body {
+            padding: 10px;
+            overflow: auto;
+            display: grid;
+            gap: 8px;
+            align-content: start;
+        }
+
+        .card {
+            border: 1px solid #d8e2ee;
+            border-radius: 8px;
+            padding: 9px;
+            background: #fff;
+            display: grid;
+            gap: 7px;
+        }
+
+        .meta {
+            font-size: 12px;
+            color: #5a738d;
+        }
+
+        .desc {
+            font-size: 13px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .status {
+            position: fixed;
+            right: 12px;
+            bottom: 12px;
+            background: rgba(26, 38, 52, 0.92);
+            color: #fff;
+            border-radius: 8px;
+            padding: 8px 10px;
+            display: none;
+            max-width: min(520px, calc(100vw - 24px));
+        }
+
+        .rating {
+            border-top: 1px dashed #d8e2ee;
+            padding-top: 8px;
+            display: grid;
+            gap: 6px;
+        }
+
+        textarea {
+            min-height: 64px;
+            width: 100%;
+        }
+
+        @media (max-width: 1000px) {
+            .panes {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <div class="bar">
+            <input id="searchInput" type="text" placeholder="Search GitHub webapps (name/description/readme)">
+            <button id="searchButton" class="primary">Search API</button>
+            <button id="loadInstalledButton" class="secondary">Refresh Installed</button>
+            <span id="searchMeta" class="meta"></span>
+        </div>
+
+        <div class="bar">
+            <span class="meta">Installs create local launchers in apps/webapps/...</span>
+        </div>
+
+        <div class="panes">
+            <div class="panel">
+                <div class="panel-header">API Results</div>
+                <div id="results" class="panel-body"></div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">Installed WebApps + Ratings</div>
+                <div id="installed" class="panel-body"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <script>
+        const EXECUTE_ENDPOINT = '../../plugins/execute';
+
+        function showStatus(message) {
+            const node = document.getElementById('status');
+            node.textContent = String(message || '');
+            node.style.display = 'block';
+            clearTimeout(showStatus.timer);
+            showStatus.timer = setTimeout(() => {
+                node.style.display = 'none';
+            }, 3200);
+        }
+
+        async function pluginAction(actionId, payload) {
+            const response = await fetch(EXECUTE_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ actionId: actionId, payload: payload || {} })
+            });
+
+            const data = await response.json();
+            if (!response.ok || data.status === 'error') {
+                throw new Error(data.message || data.error || `Action failed (${response.status})`);
+            }
+            return data;
+        }
+
+        function createRepoCard(item) {
+            const card = document.createElement('div');
+            card.className = 'card';
+
+            const title = document.createElement('strong');
+            title.textContent = item.fullName || item.name || 'Unknown repo';
+
+            const meta = document.createElement('div');
+            meta.className = 'meta';
+            meta.textContent = `Owner: ${item.owner || 'unknown'} | Stars: ${item.stars || 0}`;
+
+            const desc = document.createElement('div');
+            desc.className = 'desc';
+            desc.textContent = item.description || 'No description';
+
+            const row = document.createElement('div');
+            row.className = 'row';
+
+            const install = document.createElement('button');
+            install.className = 'primary';
+            install.textContent = 'Install as App';
+            install.addEventListener('click', async () => {
+                try {
+                    const customTitle = prompt('Launcher title (optional)', item.name || '') || '';
+                    const htmlPath = prompt('HTML path inside repo (optional)', '');
+                    const result = await pluginAction('webapphub.install', {
+                        fullName: item.fullName,
+                        branch: item.defaultBranch || 'main',
+                        title: customTitle,
+                        htmlPath: htmlPath || ''
+                    });
+                    showStatus(result.message || 'Installed');
+                    await loadInstalled();
+                } catch (error) {
+                    alert(error.message);
+                }
+            });
+
+            const openGithub = document.createElement('button');
+            openGithub.className = 'secondary';
+            openGithub.textContent = 'Open GitHub';
+            openGithub.addEventListener('click', () => {
+                if (item.url) {
+                    window.open(item.url, '_blank', 'noopener');
+                }
+            });
+
+            row.appendChild(install);
+            row.appendChild(openGithub);
+
+            card.appendChild(title);
+            card.appendChild(meta);
+            card.appendChild(desc);
+            card.appendChild(row);
+            return card;
+        }
+
+        function createInstalledCard(item, canRate, allowedRatings) {
+            const card = document.createElement('div');
+            card.className = 'card';
+
+            const title = document.createElement('strong');
+            title.textContent = item.title || item.fullName || item.slug;
+
+            const meta = document.createElement('div');
+            meta.className = 'meta';
+            meta.textContent = `${item.fullName || ''} | ${item.appUrl || ''}`;
+
+            const row = document.createElement('div');
+            row.className = 'row';
+
+            const openButton = document.createElement('button');
+            openButton.className = 'primary';
+            openButton.textContent = 'Open App';
+            openButton.addEventListener('click', () => {
+                if (window.parent && typeof window.parent.createWindow === 'function') {
+                    window.parent.createWindow(item.title || item.slug || 'WebApp', item.appUrl);
+                }
+            });
+            row.appendChild(openButton);
+
+            card.appendChild(title);
+            card.appendChild(meta);
+            card.appendChild(row);
+
+            const rating = document.createElement('div');
+            rating.className = 'rating';
+
+            const ratingMeta = document.createElement('div');
+            ratingMeta.className = 'meta';
+            const currentStatus = item.rating && item.rating.status ? item.rating.status : 'no rating';
+            ratingMeta.textContent = `Current rating: ${currentStatus}`;
+            rating.appendChild(ratingMeta);
+
+            if (!canRate) {
+                const info = document.createElement('div');
+                info.className = 'meta';
+                info.textContent = 'Enable devtools plugin to submit ratings.';
+                rating.appendChild(info);
+            } else {
+                const select = document.createElement('select');
+                (allowedRatings || []).forEach((status) => {
+                    const option = document.createElement('option');
+                    option.value = status;
+                    option.textContent = status;
+                    select.appendChild(option);
+                });
+                if (item.rating && item.rating.status) {
+                    select.value = item.rating.status;
+                }
+
+                const note = document.createElement('textarea');
+                note.placeholder = 'Optional note about compatibility';
+                note.value = item.rating && item.rating.note ? item.rating.note : '';
+
+                const save = document.createElement('button');
+                save.className = 'secondary';
+                save.textContent = 'Save Rating';
+                save.addEventListener('click', async () => {
+                    try {
+                        const result = await pluginAction('webapphub.rate', {
+                            fullName: item.fullName,
+                            status: select.value,
+                            note: note.value
+                        });
+                        showStatus(result.message || 'Rating saved');
+                        await loadInstalled();
+                    } catch (error) {
+                        alert(error.message);
+                    }
+                });
+
+                rating.appendChild(select);
+                rating.appendChild(note);
+                rating.appendChild(save);
+            }
+
+            card.appendChild(rating);
+            return card;
+        }
+
+        async function search() {
+            const input = document.getElementById('searchInput');
+            const query = String(input.value || '').trim();
+            const payload = await pluginAction('webapphub.search', { query: query, page: 1 });
+
+            const resultsNode = document.getElementById('results');
+            resultsNode.innerHTML = '';
+
+            const items = Array.isArray(payload.items) ? payload.items : [];
+            if (!items.length) {
+                const empty = document.createElement('div');
+                empty.className = 'meta';
+                empty.textContent = 'No API results found.';
+                resultsNode.appendChild(empty);
+            } else {
+                items.forEach((item) => {
+                    resultsNode.appendChild(createRepoCard(item));
+                });
+            }
+
+            const total = Number(payload.totalCount || 0);
+            document.getElementById('searchMeta').textContent = `${total} API results`; 
+        }
+
+        async function loadInstalled() {
+            const payload = await pluginAction('webapphub.list', {});
+            const installedNode = document.getElementById('installed');
+            installedNode.innerHTML = '';
+
+            const apps = Array.isArray(payload.apps) ? payload.apps : [];
+            if (!apps.length) {
+                const empty = document.createElement('div');
+                empty.className = 'meta';
+                empty.textContent = 'No installed webapps yet.';
+                installedNode.appendChild(empty);
+                return;
+            }
+
+            apps.forEach((item) => {
+                installedNode.appendChild(
+                    createInstalledCard(item, !!payload.canRate, payload.allowedRatings || [])
+                );
+            });
+        }
+
+        function bind() {
+            document.getElementById('searchButton').addEventListener('click', () => {
+                search().catch((error) => alert(error.message));
+            });
+            document.getElementById('loadInstalledButton').addEventListener('click', () => {
+                loadInstalled().catch((error) => alert(error.message));
+            });
+            document.getElementById('searchInput').addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    search().catch((error) => alert(error.message));
+                }
+            });
+        }
+
+        async function init() {
+            bind();
+            await Promise.all([search(), loadInstalled()]);
+        }
+
+        init().catch((error) => alert(error.message));
+    </script>
+</body>
+</html>
