@@ -156,6 +156,8 @@ def normalize_virtual_path(path_value):
 
 
 def resolve_fs_path(path_value=''):
+    os.makedirs(files_root, exist_ok=True)
+
     normalized = normalize_virtual_path(path_value)
     absolute_path = os.path.abspath(os.path.join(files_root, normalized))
 
