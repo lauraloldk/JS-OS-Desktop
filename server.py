@@ -286,7 +286,11 @@ plugin_manager.initialize(
 
 
 def discover_start_menu_items():
-    pattern = re.compile(r"\b(?:const|let|var)\s+start_titel\s*=\s*['\"]([^'\"]+)['\"]")
+    start_title_pattern = re.compile(
+        r"\b(?:const|let|var)\s+start_(?:titel|title)\s*=\s*['\"]([^'\"]+)['\"]",
+        re.IGNORECASE
+    )
+    html_title_pattern = re.compile(r"<title>\s*([^<]+?)\s*</title>", re.IGNORECASE | re.DOTALL)
     roots = [
         ('apps', 'app'),
         ('settings', 'settings')
@@ -311,11 +315,19 @@ def discover_start_menu_items():
                 except Exception:
                     continue
 
-                match = pattern.search(content)
-                if not match:
-                    continue
+                match = start_title_pattern.search(content)
+                start_title = match.group(1).strip() if match else ''
 
-                start_title = match.group(1).strip()
+                # Fallback for plain index.html apps without start_titel/start_title.
+                if not start_title and filename.lower() == 'index.html':
+                    title_match = html_title_pattern.search(content)
+                    if title_match:
+                        start_title = title_match.group(1).strip()
+
+                if not start_title and filename.lower() == 'index.html':
+                    folder_name = os.path.basename(os.path.dirname(file_path)).strip()
+                    start_title = folder_name
+
                 if not start_title:
                     continue
 

@@ -70,6 +70,15 @@
       "source": "builtin",
       "requiredDependencies": [],
       "optionalDependencies": []
+    },
+    "smartdialog": {
+      "enabled": true,
+      "required": false,
+      "name": "Smart Dialog Bridge",
+      "version": "1.0.0",
+      "source": "builtin",
+      "requiredDependencies": [],
+      "optionalDependencies": []
     }
   },
   "packages": {}

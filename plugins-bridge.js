@@ -5,6 +5,8 @@
     const EXECUTE_ENDPOINT = '/plugins/execute';
     const MENU_ATTR = 'data-jsos-plugin-menu-initialized';
     const BUTTON_ATTR = 'data-jsos-plugin-button-initialized';
+    const SMART_DIALOG_ATTR = 'data-jsos-smartdialog-installed';
+    const SMART_DIALOG_BYPASS_ATTR = 'data-jsos-smartdialog-bypass';
 
     async function getExtensions(target, payload) {
         const query = new URLSearchParams({
@@ -196,6 +198,202 @@
         return {};
     }
 
+    function getDialogsHost(targetWindow) {
+        if (targetWindow.parent && targetWindow.parent !== targetWindow && targetWindow.parent.JSOSDialogsHost) {
+            return targetWindow.parent.JSOSDialogsHost;
+        }
+
+        if (targetWindow.JSOSDialogsHost) {
+            return targetWindow.JSOSDialogsHost;
+        }
+
+        return null;
+    }
+
+    async function chooseDialogMode(targetWindow, operationName) {
+        const input = targetWindow.prompt(
+            `${operationName}: type "jsos" to use JS-OS dialog, or "system" to use browser/system dialog`,
+            'jsos'
+        );
+
+        if (input === null) {
+            return '';
+        }
+
+        const mode = String(input || '').trim().toLowerCase();
+        if (mode === 'jsos' || mode === 'system') {
+            return mode;
+        }
+
+        targetWindow.alert('Invalid choice. Please type "jsos" or "system".');
+        return '';
+    }
+
+    async function writeContentWithJsosPath(path, content) {
+        const response = await fetch('/fs/write', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                path,
+                content
+            })
+        });
+
+        const payload = await response.json();
+        if (!response.ok || payload.status !== 'success') {
+            throw new Error(payload.message || `Failed to save file (${response.status})`);
+        }
+    }
+
+    async function readTextFromAnchorDownload(targetWindow, anchor) {
+        const href = String(anchor.getAttribute('href') || anchor.href || '').trim();
+        if (!href) {
+            throw new Error('Download link has no href');
+        }
+
+        const response = await targetWindow.fetch(href);
+        if (!response.ok) {
+            throw new Error(`Could not read download source (${response.status})`);
+        }
+
+        const blob = await response.blob();
+        return blob.text();
+    }
+
+    async function installSmartDialogBridge(targetWindow) {
+        const doc = targetWindow.document;
+        if (!doc || !doc.body) {
+            return;
+        }
+
+        if (doc.body.getAttribute(SMART_DIALOG_ATTR)) {
+            return;
+        }
+
+        const appId = inferAppId(targetWindow);
+        let descriptors = [];
+        try {
+            descriptors = await getExtensions('smartdialog.interceptor', { appId });
+        } catch (error) {
+            descriptors = [];
+        }
+
+        const enabled = descriptors.some(function(item) {
+            return item && item.id === 'smartdialog.intercept' && item.enabled !== false;
+        });
+
+        if (!enabled) {
+            return;
+        }
+
+        doc.body.setAttribute(SMART_DIALOG_ATTR, '1');
+
+        doc.addEventListener('click', function(event) {
+            const input = event.target && event.target.closest ? event.target.closest('input[type="file"]') : null;
+            if (!input || input.disabled || input.readOnly) {
+                return;
+            }
+
+            if (input.hasAttribute(SMART_DIALOG_BYPASS_ATTR)) {
+                input.removeAttribute(SMART_DIALOG_BYPASS_ATTR);
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            (async function() {
+                const mode = await chooseDialogMode(targetWindow, 'Open file');
+                if (!mode) {
+                    return;
+                }
+
+                if (mode === 'system') {
+                    input.setAttribute(SMART_DIALOG_BYPASS_ATTR, '1');
+                    input.click();
+                    return;
+                }
+
+                const dialogsHost = getDialogsHost(targetWindow);
+                if (!dialogsHost || typeof dialogsHost.openFileDialog !== 'function') {
+                    throw new Error('JS-OS dialog host is unavailable');
+                }
+
+                const picked = await dialogsHost.openFileDialog({ path: '' });
+                if (!picked || !picked.path) {
+                    return;
+                }
+
+                const readResponse = await fetch(`/fs/read?path=${encodeURIComponent(String(picked.path))}`, {
+                    cache: 'no-store'
+                });
+                const readPayload = await readResponse.json();
+                if (!readResponse.ok) {
+                    throw new Error(readPayload.error || `Failed to read file (${readResponse.status})`);
+                }
+
+                const selectedPath = String(readPayload.path || picked.path || '');
+                const fileName = selectedPath.split('/').pop() || 'file.txt';
+                const file = new targetWindow.File([String(readPayload.content || '')], fileName, {
+                    type: 'text/plain'
+                });
+
+                const transfer = new targetWindow.DataTransfer();
+                transfer.items.add(file);
+                input.files = transfer.files;
+                input.dispatchEvent(new targetWindow.Event('change', { bubbles: true }));
+            })().catch(function(error) {
+                targetWindow.alert(error.message || 'Smart dialog failed');
+            });
+        }, true);
+
+        doc.addEventListener('click', function(event) {
+            const anchor = event.target && event.target.closest ? event.target.closest('a[download]') : null;
+            if (!anchor) {
+                return;
+            }
+
+            if (anchor.hasAttribute(SMART_DIALOG_BYPASS_ATTR)) {
+                anchor.removeAttribute(SMART_DIALOG_BYPASS_ATTR);
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            (async function() {
+                const mode = await chooseDialogMode(targetWindow, 'Save file');
+                if (!mode) {
+                    return;
+                }
+
+                if (mode === 'system') {
+                    anchor.setAttribute(SMART_DIALOG_BYPASS_ATTR, '1');
+                    anchor.click();
+                    return;
+                }
+
+                const dialogsHost = getDialogsHost(targetWindow);
+                if (!dialogsHost || typeof dialogsHost.saveFileDialog !== 'function') {
+                    throw new Error('JS-OS dialog host is unavailable');
+                }
+
+                const suggestedName = String(anchor.getAttribute('download') || '').trim() || 'download.txt';
+                const selected = await dialogsHost.saveFileDialog({ path: '', fileName: suggestedName });
+                if (!selected || !selected.path) {
+                    return;
+                }
+
+                const content = await readTextFromAnchorDownload(targetWindow, anchor);
+                await writeContentWithJsosPath(String(selected.path), content);
+            })().catch(function(error) {
+                targetWindow.alert(error.message || 'Smart dialog failed');
+            });
+        }, true);
+    }
+
     async function openPluginMenu(targetWindow, triggerButton) {
         const doc = targetWindow.document;
         const appId = inferAppId(targetWindow);
@@ -327,6 +525,10 @@
         const run = function() {
             ensureToolbarButtons(targetWindow).catch(function() {
                 // Keep app usable even if plugin metadata fails.
+            });
+
+            installSmartDialogBridge(targetWindow).catch(function() {
+                // Keep app usable even if smart dialog bridge fails.
             });
         };
 
