@@ -1,6 +1,7 @@
 (function() {
     'use strict';
 
+    const OS_SETTINGS_PATH = 'data/os-settings.json';
     const WINDOW_SETTINGS_PATH = 'data/window-settings.json';
     const SETTINGS_READ_ENDPOINT = '/settings/read';
     const SETTINGS_SAVE_ENDPOINT = '/settings/save';
@@ -11,6 +12,8 @@
 
     let windowSettingsDocument = null;
     let windowSettingsLoadPromise = null;
+    let currentWindowColor = '';
+    let windowAppearanceLoadPromise = null;
 
     function ensureInteractionOverlay() {
         let overlay = document.getElementById('jsos-interaction-overlay');
@@ -30,6 +33,79 @@
         overlay.style.zIndex = '999999';
         document.body.appendChild(overlay);
         return overlay;
+    }
+
+    function getSettingsValues(payload) {
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+            return {};
+        }
+
+        if (payload.settings && typeof payload.settings === 'object' && !Array.isArray(payload.settings)) {
+            return payload.settings;
+        }
+
+        return payload;
+    }
+
+    function isHexColor(value) {
+        return /^#[0-9a-f]{6}$/i.test(String(value || '').trim());
+    }
+
+    function setWindowColor(color) {
+        currentWindowColor = isHexColor(color) ? String(color).trim() : '';
+    }
+
+    function applyWindowColorToElement(windowDiv) {
+        if (!windowDiv) {
+            return;
+        }
+
+        const windowHeader = windowDiv.querySelector('.window-header');
+
+        if (currentWindowColor) {
+            if (windowHeader) {
+                windowHeader.style.backgroundColor = currentWindowColor;
+            }
+            windowDiv.style.backgroundColor = currentWindowColor;
+        } else {
+            if (windowHeader) {
+                windowHeader.style.backgroundColor = '';
+            }
+            windowDiv.style.backgroundColor = '';
+        }
+    }
+
+    function applyWindowColorToAllWindows() {
+        windowsById.forEach(function(meta) {
+            if (meta && meta.windowDiv) {
+                applyWindowColorToElement(meta.windowDiv);
+            }
+        });
+    }
+
+    async function loadWindowAppearanceSettings() {
+        if (windowAppearanceLoadPromise) {
+            return windowAppearanceLoadPromise;
+        }
+
+        windowAppearanceLoadPromise = (async function() {
+            try {
+                const response = await fetch(OS_SETTINGS_PATH, { cache: 'no-store' });
+                if (!response.ok) {
+                    setWindowColor('');
+                    return;
+                }
+
+                const payload = await response.json();
+                const settings = getSettingsValues(payload);
+                setWindowColor(settings.windowcolor || '');
+            } catch (error) {
+                console.error('Failed to load window appearance settings:', error);
+                setWindowColor('');
+            }
+        })();
+
+        return windowAppearanceLoadPromise;
     }
 
     function startMouseInteraction(options) {
@@ -405,8 +481,18 @@
         minimizeWindow: minimizeWindowById,
         restoreWindow: restoreWindowById,
         toggleMinimize: toggleMinimizeById,
-        updateTitle: updateWindowTitleById
+        updateTitle: updateWindowTitleById,
+        applyWindowColor: function(color) {
+            setWindowColor(color || '');
+            applyWindowColorToAllWindows();
+        }
     };
+
+    loadWindowAppearanceSettings().then(function() {
+        applyWindowColorToAllWindows();
+    }).catch(function() {
+        // Keep default window colors if settings load fails.
+    });
 
     ensureWindowSettingsLoaded().catch(function(error) {
         console.error('Failed to initialize window settings:', error);
@@ -453,6 +539,7 @@
         };
 
         windowsById.set(windowId, meta);
+        applyWindowColorToElement(windowDiv);
 
         const windowHeader = windowDiv.querySelector('.window-header');
         const windowContent = windowDiv.querySelector('.window-content');

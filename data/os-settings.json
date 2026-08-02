@@ -1,7 +1,8 @@
 {
   "settings": {
-    "desktopcolor": "#43c7ac",
-    "taskbarcolor": "#457cc4"
+    "desktopcolor": "#5ec1d9",
+    "taskbarcolor": "#457cc4",
+    "windowcolor": "#4159d2"
   },
   "settingsMeta": {
     "desktopcolor": {
@@ -17,6 +18,13 @@
       "category": "Desktop",
       "subcategory": "Design",
       "description": "Background color for the taskbar."
+    },
+    "windowcolor": {
+      "label": "Window Color",
+      "type": "color",
+      "category": "Desktop",
+      "subcategory": "Design",
+      "description": "Background color for application windows."
     }
   }
 }

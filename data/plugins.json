@@ -50,6 +50,26 @@
       "optionalDependencies": [
         "zip"
       ]
+    },
+    "quicknotes": {
+      "enabled": false,
+      "required": false,
+      "name": "Quick Notes Integration",
+      "version": "1.0.0",
+      "source": "builtin",
+      "requiredDependencies": [],
+      "optionalDependencies": [
+        "notepad_tools"
+      ]
+    },
+    "devtools": {
+      "enabled": false,
+      "required": false,
+      "name": "Developer Tools",
+      "version": "1.0.0",
+      "source": "builtin",
+      "requiredDependencies": [],
+      "optionalDependencies": []
     }
   },
   "packages": {}

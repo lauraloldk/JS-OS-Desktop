@@ -4,11 +4,16 @@
 	const DISCOVER_ENDPOINT = '../settings/discover';
 	const READ_ENDPOINT = '../settings/read';
 	const SAVE_ENDPOINT = '../settings/save';
+	const PLUGIN_EXTENSIONS_ENDPOINT = '../plugins/extensions';
+	const PLUGIN_EXECUTE_ENDPOINT = '../plugins/execute';
 
 	let selectedPath = '';
 	let originalData = null;
 	let currentCategory = '';
 	let currentSubcategory = '';
+	let pluginSections = [];
+	let devtoolsEntries = [];
+	let devtoolsSelectedKey = '';
 
 	function showStatus(message, type) {
 		const status = document.getElementById('status');
@@ -20,6 +25,29 @@
 		const status = document.getElementById('status');
 		status.textContent = '';
 		status.className = '';
+	}
+
+	function showDevtoolsStatus(message, type) {
+		const status = document.getElementById('devtoolsStatus');
+		if (!status) {
+			return;
+		}
+
+		status.textContent = message;
+		status.className = type || '';
+	}
+
+	function clearDevtoolsStatus() {
+		showDevtoolsStatus('', '');
+	}
+
+	function escapeHtml(text) {
+		return String(text === undefined || text === null ? '' : text)
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#039;');
 	}
 
 	function normalizeLabel(key) {
@@ -385,6 +413,286 @@
 		}
 	}
 
+	async function getPluginExtensions(target, payload) {
+		const query = new URLSearchParams({
+			target: String(target || ''),
+			payload: JSON.stringify(payload || {})
+		});
+
+		const response = await fetch(`${PLUGIN_EXTENSIONS_ENDPOINT}?${query.toString()}`, {
+			cache: 'no-store'
+		});
+
+		const data = await response.json();
+		if (!response.ok) {
+			throw new Error(data.error || `Plugin extension load failed (${response.status})`);
+		}
+
+		return Array.isArray(data.extensions) ? data.extensions : [];
+	}
+
+	async function executePluginAction(actionId, payload) {
+		const response = await fetch(PLUGIN_EXECUTE_ENDPOINT, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				actionId: String(actionId || ''),
+				payload: payload || {}
+			})
+		});
+
+		const data = await response.json();
+		if (!response.ok || data.status === 'error') {
+			throw new Error(data.message || data.error || `Plugin action failed (${response.status})`);
+		}
+
+		return data;
+	}
+
+	function setModalVisible(visible) {
+		const modal = document.getElementById('devtoolsModal');
+		if (!modal) {
+			return;
+		}
+
+		if (visible) {
+			modal.classList.add('show');
+			modal.setAttribute('aria-hidden', 'false');
+		} else {
+			modal.classList.remove('show');
+			modal.setAttribute('aria-hidden', 'true');
+		}
+	}
+
+	function parseDevtoolsValue(rawValue) {
+		const text = String(rawValue || '').trim();
+		if (!text) {
+			return '';
+		}
+
+		try {
+			return JSON.parse(text);
+		} catch (error) {
+			return rawValue;
+		}
+	}
+
+	function getDevtoolsFormData() {
+		return {
+			key: document.getElementById('devtoolsKey').value.trim(),
+			type: document.getElementById('devtoolsType').value,
+			category: document.getElementById('devtoolsCategory').value.trim(),
+			subcategory: document.getElementById('devtoolsSubcategory').value.trim(),
+			label: document.getElementById('devtoolsLabel').value.trim(),
+			description: document.getElementById('devtoolsDescription').value.trim(),
+			value: parseDevtoolsValue(document.getElementById('devtoolsValue').value)
+		};
+	}
+
+	function clearDevtoolsForm() {
+		document.getElementById('devtoolsKey').value = '';
+		document.getElementById('devtoolsType').value = 'string';
+		document.getElementById('devtoolsCategory').value = '';
+		document.getElementById('devtoolsSubcategory').value = '';
+		document.getElementById('devtoolsLabel').value = '';
+		document.getElementById('devtoolsDescription').value = '';
+		document.getElementById('devtoolsValue').value = '';
+		devtoolsSelectedKey = '';
+	}
+
+	function populateDevtoolsForm(entry) {
+		const meta = (entry && entry.meta && typeof entry.meta === 'object') ? entry.meta : {};
+		document.getElementById('devtoolsKey').value = entry ? (entry.key || '') : '';
+		document.getElementById('devtoolsType').value = String(meta.type || inferFieldType(entry ? entry.key : '', entry ? entry.value : '', meta) || 'string');
+		document.getElementById('devtoolsCategory').value = String(meta.category || '');
+		document.getElementById('devtoolsSubcategory').value = String(meta.subcategory || '');
+		document.getElementById('devtoolsLabel').value = String(meta.label || '');
+		document.getElementById('devtoolsDescription').value = String(meta.description || '');
+		document.getElementById('devtoolsValue').value = JSON.stringify(entry ? entry.value : '', null, 2);
+	}
+
+	function renderDevtoolsRows() {
+		const body = document.getElementById('devtoolsRows');
+		if (!body) {
+			return;
+		}
+
+		body.innerHTML = '';
+
+		if (!selectedPath) {
+			body.innerHTML = '<tr><td colspan="6">Select a settings file first.</td></tr>';
+			return;
+		}
+
+		if (!devtoolsEntries.length) {
+			body.innerHTML = '<tr><td colspan="6">No settings strings found in this file.</td></tr>';
+			return;
+		}
+
+		devtoolsEntries.forEach(function(entry) {
+			const meta = (entry.meta && typeof entry.meta === 'object') ? entry.meta : {};
+			const type = meta.type || inferFieldType(entry.key, entry.value, meta);
+			const row = document.createElement('tr');
+			if (devtoolsSelectedKey && devtoolsSelectedKey === entry.key) {
+				row.classList.add('active');
+			}
+
+			const valuePreview = (typeof entry.value === 'string')
+				? entry.value
+				: JSON.stringify(entry.value);
+
+			row.innerHTML = [
+				`<td>${escapeHtml(entry.key)}</td>`,
+				`<td>${escapeHtml(type)}</td>`,
+				`<td>${escapeHtml(meta.category || '')}</td>`,
+				`<td>${escapeHtml(meta.subcategory || '')}</td>`,
+				`<td>${escapeHtml(valuePreview)}</td>`,
+				'<td class="actions-cell"><button type="button" class="button secondary">Edit</button></td>'
+			].join('');
+
+			row.querySelector('button').addEventListener('click', function() {
+				devtoolsSelectedKey = entry.key;
+				populateDevtoolsForm(entry);
+				renderDevtoolsRows();
+				clearDevtoolsStatus();
+			});
+
+			body.appendChild(row);
+		});
+	}
+
+	async function refreshCurrentFileView() {
+		if (!selectedPath) {
+			return;
+		}
+
+		const payload = await loadSettingsFile(selectedPath);
+		originalData = payload.data;
+		renderEditor(selectedPath, originalData);
+	}
+
+	async function loadDevtoolsEntries() {
+		if (!selectedPath) {
+			devtoolsEntries = [];
+			renderDevtoolsRows();
+			return;
+		}
+
+		const result = await executePluginAction('devtools.settings.list', { path: selectedPath });
+		devtoolsEntries = Array.isArray(result.entries) ? result.entries : [];
+		renderDevtoolsRows();
+	}
+
+	async function createDevtoolsEntry() {
+		if (!selectedPath) {
+			throw new Error('Select a settings file before creating entries');
+		}
+
+		const formData = getDevtoolsFormData();
+		await executePluginAction('devtools.settings.create', {
+			path: selectedPath,
+			...formData
+		});
+
+		clearDevtoolsForm();
+		await Promise.all([refreshCurrentFileView(), loadDevtoolsEntries()]);
+		showDevtoolsStatus('Setting created successfully.', 'success');
+	}
+
+	async function updateDevtoolsEntry() {
+		if (!selectedPath) {
+			throw new Error('Select a settings file before updating entries');
+		}
+
+		if (!devtoolsSelectedKey) {
+			throw new Error('Select an existing entry first');
+		}
+
+		const formData = getDevtoolsFormData();
+		await executePluginAction('devtools.settings.update', {
+			path: selectedPath,
+			oldKey: devtoolsSelectedKey,
+			...formData
+		});
+
+		devtoolsSelectedKey = formData.key;
+		await Promise.all([refreshCurrentFileView(), loadDevtoolsEntries()]);
+		showDevtoolsStatus('Setting updated successfully.', 'success');
+	}
+
+	async function deleteDevtoolsEntry() {
+		if (!selectedPath) {
+			throw new Error('Select a settings file before deleting entries');
+		}
+
+		if (!devtoolsSelectedKey) {
+			throw new Error('Select an existing entry first');
+		}
+
+		if (!window.confirm(`Delete setting "${devtoolsSelectedKey}"?`)) {
+			return;
+		}
+
+		await executePluginAction('devtools.settings.delete', {
+			path: selectedPath,
+			key: devtoolsSelectedKey
+		});
+
+		clearDevtoolsForm();
+		await Promise.all([refreshCurrentFileView(), loadDevtoolsEntries()]);
+		showDevtoolsStatus('Setting removed successfully.', 'success');
+	}
+
+	async function openDevtoolsManager() {
+		setModalVisible(true);
+		clearDevtoolsStatus();
+		await loadDevtoolsEntries();
+	}
+
+	async function handlePluginSection(section) {
+		const sectionId = String((section || {}).id || '').trim();
+		if (sectionId === 'devtools.settings_string_manager') {
+			await openDevtoolsManager();
+			return;
+		}
+
+		throw new Error(`Unknown plugin section: ${sectionId}`);
+	}
+
+	async function renderPluginSections() {
+		const container = document.getElementById('settingsPluginSections');
+		container.innerHTML = '';
+
+		try {
+			pluginSections = await getPluginExtensions('settings.sections', {
+				selectedPath: selectedPath || ''
+			});
+		} catch (error) {
+			container.innerHTML = `<div id="emptyState">${escapeHtml(error.message)}</div>`;
+			return;
+		}
+
+		if (!pluginSections.length) {
+			container.innerHTML = '<div id="emptyState">No plugin sections available.</div>';
+			return;
+		}
+
+		pluginSections.forEach(function(section) {
+			const button = document.createElement('button');
+			button.type = 'button';
+			button.className = 'plugin-section-item';
+			button.textContent = section.label || section.id || 'Plugin Section';
+			button.addEventListener('click', function() {
+				handlePluginSection(section).catch(function(error) {
+					showStatus(error.message, 'error');
+				});
+			});
+			container.appendChild(button);
+		});
+	}
+
 	function setActiveFileButton(path) {
 		document.querySelectorAll('.file-item').forEach(function(button) {
 			button.classList.toggle('active', button.dataset.path === path);
@@ -400,6 +708,7 @@
 		currentSubcategory = '';
 		renderEditor(selectedPath, originalData);
 		setActiveFileButton(selectedPath);
+		await renderPluginSections();
 	}
 
 	function collectCurrentData() {
@@ -447,6 +756,9 @@
 				if (taskbar && editable.taskbarcolor) {
 					taskbar.style.backgroundColor = editable.taskbarcolor;
 				}
+				if (window.parent.JSOSWindows && typeof window.parent.JSOSWindows.applyWindowColor === 'function') {
+					window.parent.JSOSWindows.applyWindowColor(editable.windowcolor || '');
+				}
 			}
 		} catch (error) {
 			// Best-effort visual sync only.
@@ -460,6 +772,7 @@
 		const files = await discoverSettingsFiles();
 		if (!files.length) {
 			filesContainer.textContent = 'No editable config JSON files found.';
+			await renderPluginSections();
 			return;
 		}
 
@@ -493,6 +806,40 @@
 			openSettingsPath(selectedPath).catch(function(error) {
 				showStatus(error.message, 'error');
 			});
+		});
+
+		document.getElementById('devtoolsCloseButton').addEventListener('click', function() {
+			setModalVisible(false);
+		});
+
+		document.getElementById('devtoolsCreateButton').addEventListener('click', function() {
+			createDevtoolsEntry().catch(function(error) {
+				showDevtoolsStatus(error.message, 'error');
+			});
+		});
+
+		document.getElementById('devtoolsUpdateButton').addEventListener('click', function() {
+			updateDevtoolsEntry().catch(function(error) {
+				showDevtoolsStatus(error.message, 'error');
+			});
+		});
+
+		document.getElementById('devtoolsDeleteButton').addEventListener('click', function() {
+			deleteDevtoolsEntry().catch(function(error) {
+				showDevtoolsStatus(error.message, 'error');
+			});
+		});
+
+		document.getElementById('devtoolsResetButton').addEventListener('click', function() {
+			clearDevtoolsForm();
+			renderDevtoolsRows();
+			clearDevtoolsStatus();
+		});
+
+		document.getElementById('devtoolsModal').addEventListener('click', function(event) {
+			if (event.target && event.target.id === 'devtoolsModal') {
+				setModalVisible(false);
+			}
 		});
 	}
 
