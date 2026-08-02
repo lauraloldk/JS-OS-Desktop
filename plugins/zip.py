@@ -314,6 +314,55 @@ def make_directory(path_value, context):
     }
 
 
+def delete_file(path_value, context):
+    archive_rel, inner_rel = _split_zip_virtual_path(path_value)
+    if not archive_rel:
+        return None
+
+    # Let host filesystem handle deleting the physical .zip archive itself.
+    if not inner_rel:
+        return None
+
+    archive_virtual, archive_abs = _resolve_zip_archive(archive_rel, context)
+    archive_pwd = _password_bytes_for_archive(archive_virtual, context)
+    target_key = _normalize_inner_path(inner_rel).rstrip('/')
+    if not target_key:
+        raise ValueError('Cannot delete zip root')
+
+    removed = False
+
+    def writer(source_zip, target_zip):
+        nonlocal removed
+
+        for info in source_zip.infolist():
+            key = str(info.filename or '').replace('\\', '/').strip('/')
+            if key == target_key:
+                removed = True
+                continue
+            try:
+                if archive_pwd:
+                    entry_data = source_zip.read(info.filename, pwd=archive_pwd)
+                else:
+                    entry_data = source_zip.read(info.filename)
+            except RuntimeError as exc:
+                if 'password required' in str(exc).lower() or 'bad password' in str(exc).lower():
+                    raise PermissionError(
+                        f'Password required or incorrect for zip archive: {archive_virtual}'
+                    ) from exc
+                raise
+
+            target_zip.writestr(info, entry_data)
+
+    _rewrite_zip_with_updates(archive_abs, writer)
+
+    if not removed:
+        raise FileNotFoundError(f'File not found: {archive_virtual}/{target_key}')
+
+    return {
+        'path': f'{archive_virtual}/{target_key}'
+    }
+
+
 def _create_new_zip(target_dir_rel, context):
     resolve_fs_path = context['resolve_fs_path']
     target_dir, target_abs = resolve_fs_path(target_dir_rel or '')

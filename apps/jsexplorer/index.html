@@ -290,8 +290,20 @@
             bottom.classList.toggle('hidden', !isDeleteMode);
         }
 
-        function getFileEntries() {
-            return (currentEntries || []).filter((entry) => entry && entry.type === 'file');
+        function isZipArchiveEntry(entry) {
+            if (!entry) {
+                return false;
+            }
+            const path = String(entry.path || '').toLowerCase();
+            return entry.type === 'directory' && path.endsWith('.zip');
+        }
+
+        function isDeletableEntry(entry) {
+            return !!entry && (entry.type === 'file' || isZipArchiveEntry(entry));
+        }
+
+        function getDeletableEntries() {
+            return (currentEntries || []).filter((entry) => isDeletableEntry(entry));
         }
 
         function setDeleteMode(enabled) {
@@ -317,7 +329,7 @@
         }
 
         function selectAllFiles() {
-            deleteSelection = new Set(getFileEntries().map((entry) => entry.path));
+            deleteSelection = new Set(getDeletableEntries().map((entry) => entry.path));
             renderEntries();
         }
 
@@ -363,7 +375,7 @@
                 const item = document.createElement('div');
                 item.className = 'entry';
 
-                if (isDeleteMode && entry.type === 'file') {
+                if (isDeleteMode && isDeletableEntry(entry)) {
                     const checkbox = document.createElement('input');
                     checkbox.type = 'checkbox';
                     checkbox.className = 'entry-delete-checkbox';
@@ -411,7 +423,7 @@
                         item.classList.add('active');
                         await openContextMenu(event.clientX, event.clientY, entry);
                     });
-                } else if (entry.type === 'file') {
+                } else if (isDeletableEntry(entry)) {
                     item.addEventListener('click', () => {
                         const shouldSelect = !deleteSelection.has(entry.path);
                         toggleDeleteSelection(entry.path, shouldSelect);

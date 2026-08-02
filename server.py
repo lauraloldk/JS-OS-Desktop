@@ -250,6 +250,26 @@ def create_fs_directory(path_value):
     return {'path': normalized}
 
 
+def delete_fs_file(path_value):
+    normalized = normalize_virtual_path(path_value)
+    if not normalized:
+        raise ValueError('Cannot delete root directory')
+
+    plugin_result = plugin_manager.call_hook('delete_file', normalized)
+    if plugin_result is not None:
+        return plugin_result
+
+    normalized, absolute_path = resolve_fs_path(normalized)
+    if not os.path.exists(absolute_path):
+        raise FileNotFoundError(f'File not found: {normalized}')
+
+    if not os.path.isfile(absolute_path):
+        raise ValueError('Only files can be deleted with this action')
+
+    os.remove(absolute_path)
+    return {'path': normalized}
+
+
 plugin_manager.initialize(
     current_dir,
     files_root,
@@ -637,7 +657,8 @@ class MyRequestHandler(http.server.SimpleHTTPRequestHandler):
                 context = {
                     'base_dir': current_dir,
                     'shortcuts_file': shortcuts_file,
-                    'files_root': files_root
+                    'files_root': files_root,
+                    'delete_fs_file': delete_fs_file
                 }
 
                 result = actions_core.execute_action(target, action_id, payload, context)

@@ -29,8 +29,13 @@ def list_actions(target: str, payload: Dict[str, Any], context: Dict[str, Any]) 
     entry = payload.get('entry') if isinstance(payload, dict) else None
     if isinstance(entry, dict):
         actions.insert(0, {'id': 'jsexplorer.open', 'label': 'Open'})
+        entry_path = str(entry.get('path') or '').replace('\\', '/').strip('/')
+        is_zip_archive = bool(entry_path) and entry_path.lower().endswith('.zip')
+
         if entry.get('type') == 'file':
             actions.insert(1, {'id': 'jsexplorer.open_notepad', 'label': 'Open In Notepad'})
+            actions.append({'id': 'jsexplorer.delete_file', 'label': 'Delete File'})
+        elif is_zip_archive:
             actions.append({'id': 'jsexplorer.delete_file', 'label': 'Delete File'})
 
     return actions
@@ -66,13 +71,23 @@ def execute_action(target: str, action_id: str, payload: Dict[str, Any], context
             if not normalized:
                 raise ValueError('File path is required')
 
-            target_path = _safe_join(root, normalized)
-            if not os.path.exists(target_path):
-                raise FileNotFoundError(f'File not found: {normalized}')
-            if not os.path.isfile(target_path):
-                raise ValueError('Only files can be deleted with this action')
+            is_zip_archive = normalized.lower().endswith('.zip')
+            if isinstance(entry, dict):
+                entry_type = str(entry.get('type') or '').lower()
+                if entry_type == 'directory' and not is_zip_archive:
+                    raise ValueError('Only files (or .zip archives) can be deleted with this action')
 
-            os.remove(target_path)
+            delete_fs_file = context.get('delete_fs_file')
+            if callable(delete_fs_file):
+                delete_fs_file(normalized)
+            else:
+                target_path = _safe_join(root, normalized)
+                if not os.path.exists(target_path):
+                    raise FileNotFoundError(f'File not found: {normalized}')
+                if not os.path.isfile(target_path):
+                    raise ValueError('Only files can be deleted with this action')
+                os.remove(target_path)
+
             return {'handled': True, 'status': 'success', 'path': normalized}
 
         return {'handled': False}

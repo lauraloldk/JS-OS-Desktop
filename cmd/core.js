@@ -65,7 +65,7 @@
         return `Opened app ${name}`;
     }
 
-    function openNotepad(filePath) {
+    async function openNotepad(filePath) {
         const opener = getOpenTarget();
         if (!opener) {
             throw new Error('Window system is not available in this context');
@@ -74,6 +74,13 @@
         const cleanPath = normalizePath(stripQuotes(filePath));
         if (!cleanPath) {
             throw new Error('Missing file path in command');
+        }
+
+        // Validate target as a readable file so zip-internal paths work and directories fail clearly.
+        try {
+            await requestJson(`/fs/read?path=${encodeURIComponent(cleanPath)}`, { cache: 'no-store' });
+        } catch (error) {
+            throw new Error(`Cannot open file in Notepad: ${cleanPath}`);
         }
 
         const fileName = cleanPath.split('/').pop() || cleanPath;
@@ -178,7 +185,7 @@
         }
     });
 
-    function executeOpenIn(filePath, appName) {
+    async function executeOpenIn(filePath, appName) {
         const app = String(appName || '').trim().toLowerCase();
 
         if (app === 'notepad') {
