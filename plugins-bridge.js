@@ -9,8 +9,19 @@
     const SMART_DIALOG_BYPASS_ATTR = 'data-jsos-smartdialog-bypass';
     const SMART_DIALOG_INPUT_PATCHED_ATTR = 'data-jsos-smartdialog-input-patched';
     const SMART_DIALOG_RECURSE_ATTR = 'data-jsos-smartdialog-recursive-installed';
+    const BRIDGE_STATE_KEY = '__jsosPluginsBridgeState';
+    const EXTENSIONS_CACHE_TTL_MS = 10000;
+
+    const extensionsCache = new Map();
 
     async function getExtensions(target, payload) {
+        const cacheKey = `${String(target || '')}::${JSON.stringify(payload || {})}`;
+        const now = Date.now();
+        const cached = extensionsCache.get(cacheKey);
+        if (cached && (now - cached.time) < EXTENSIONS_CACHE_TTL_MS) {
+            return Array.isArray(cached.value) ? cached.value.slice() : [];
+        }
+
         const query = new URLSearchParams({
             target: String(target || ''),
             payload: JSON.stringify(payload || {})
@@ -25,7 +36,12 @@
             throw new Error(data.error || `Extensions request failed (${response.status})`);
         }
 
-        return Array.isArray(data.extensions) ? data.extensions : [];
+        const value = Array.isArray(data.extensions) ? data.extensions : [];
+        extensionsCache.set(cacheKey, {
+            time: now,
+            value: value.slice()
+        });
+        return value;
     }
 
     async function executePluginAction(actionId, payload) {
@@ -618,7 +634,28 @@
         });
     }
 
+    function getBridgeState(targetWindow) {
+        if (!targetWindow[BRIDGE_STATE_KEY] || typeof targetWindow[BRIDGE_STATE_KEY] !== 'object') {
+            targetWindow[BRIDGE_STATE_KEY] = {
+                initialized: false,
+                intervalId: null
+            };
+        }
+
+        return targetWindow[BRIDGE_STATE_KEY];
+    }
+
     function installAutoToolbarBridge(targetWindow) {
+        if (!targetWindow || !targetWindow.document) {
+            return;
+        }
+
+        const state = getBridgeState(targetWindow);
+        if (state.initialized) {
+            return;
+        }
+        state.initialized = true;
+
         const run = function() {
             ensureToolbarButtons(targetWindow).catch(function() {
                 // Keep app usable even if plugin metadata fails.
@@ -630,12 +667,19 @@
         };
 
         if (targetWindow.document && targetWindow.document.readyState === 'loading') {
-            targetWindow.document.addEventListener('DOMContentLoaded', run);
+            targetWindow.document.addEventListener('DOMContentLoaded', run, { once: true });
         } else {
             run();
         }
 
-        targetWindow.setInterval(run, 2500);
+        state.intervalId = targetWindow.setInterval(run, 2500);
+        targetWindow.addEventListener('beforeunload', function() {
+            if (state.intervalId) {
+                targetWindow.clearInterval(state.intervalId);
+                state.intervalId = null;
+            }
+            state.initialized = false;
+        }, { once: true });
     }
 
     if (window.parent === window) {
