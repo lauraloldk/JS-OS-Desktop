@@ -16,7 +16,7 @@
         .layout {
             padding: 14px;
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr;
             gap: 12px;
             box-sizing: border-box;
             height: 100vh;
@@ -133,14 +133,6 @@
                 <button id="reloadPlugins">Reload</button>
             </div>
             <div id="pluginsList" class="list"></div>
-        </div>
-
-        <div class="panel">
-            <div class="head">
-                <span>Packages</span>
-                <button id="reloadPackages">Reload</button>
-            </div>
-            <div id="packagesList" class="list"></div>
         </div>
     </div>
 
@@ -290,83 +282,9 @@
             });
         }
 
-        async function renderPackages() {
-            const container = document.getElementById('packagesList');
-            container.innerHTML = '';
-            const payload = await apiGet('../../plugins/packages');
-            const packages = Array.isArray(payload.packages) ? payload.packages : [];
-
-            if (!packages.length) {
-                container.textContent = 'No packages found in packages/.';
-                return;
-            }
-
-            packages.forEach((pkg) => {
-                const card = document.createElement('div');
-                card.className = 'item';
-
-                const title = document.createElement('strong');
-                title.textContent = `${pkg.name} (${pkg.id})`;
-
-                const meta = document.createElement('div');
-                meta.className = 'meta';
-                meta.textContent = `Available ${pkg.version} | Installed ${pkg.installedVersion || 'none'}`;
-
-                const row = document.createElement('div');
-                row.className = 'row';
-
-                const install = document.createElement('button');
-                install.className = 'primary';
-                install.textContent = pkg.isInstalled ? 'Reinstall blocked' : 'Install';
-                install.disabled = !!pkg.isInstalled;
-                install.addEventListener('click', async () => {
-                    await apiPost('../../plugins/install', { packageId: pkg.id });
-                    showStatus(`${pkg.id} installed`);
-                    await renderPackages();
-                    await renderPlugins();
-                });
-
-                const update = document.createElement('button');
-                update.textContent = 'Update';
-                update.disabled = !pkg.isInstalled;
-                update.addEventListener('click', async () => {
-                    await apiPost('../../plugins/update', { packageId: pkg.id });
-                    showStatus(`${pkg.id} updated`);
-                    await renderPackages();
-                    await renderPlugins();
-                });
-
-                const uninstall = document.createElement('button');
-                uninstall.textContent = 'Uninstall';
-                uninstall.disabled = !pkg.isInstalled;
-                uninstall.addEventListener('click', async () => {
-                    const ok = confirm(`Uninstall package ${pkg.id}?`);
-                    if (!ok) {
-                        return;
-                    }
-
-                    await apiPost('../../plugins/uninstall', { packageId: pkg.id });
-                    showStatus(`${pkg.id} uninstalled`);
-                    await renderPackages();
-                    await renderPlugins();
-                });
-
-                row.appendChild(install);
-                row.appendChild(update);
-                row.appendChild(uninstall);
-                card.appendChild(title);
-                card.appendChild(meta);
-                card.appendChild(row);
-                container.appendChild(card);
-            });
-        }
-
         async function init() {
             document.getElementById('reloadPlugins').addEventListener('click', () => renderPlugins().catch((error) => alert(error.message)));
-            document.getElementById('reloadPackages').addEventListener('click', () => renderPackages().catch((error) => alert(error.message)));
-
             await renderPlugins();
-            await renderPackages();
         }
 
         init().catch((error) => alert(error.message));

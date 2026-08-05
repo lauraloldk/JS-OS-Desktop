@@ -95,7 +95,20 @@
   "packages": {
     "webapphub": {
       "version": "1.0.0",
-      "updatedAt": 1785710388
+      "name": "WebApp Hub Package",
+      "source": "github",
+      "packagePath": "packages/webapphub",
+      "installManifest": [
+        {
+          "from": "payload/apps/webapphub",
+          "to": "apps/webapphub"
+        },
+        {
+          "from": "payload/plugins/webapphub_plugin.py",
+          "to": "plugins/webapphub_plugin.py"
+        }
+      ],
+      "updatedAt": 1785944125
     }
   }
 }

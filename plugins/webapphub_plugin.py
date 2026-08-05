@@ -11,7 +11,7 @@ import zipfile
 PLUGIN_ID = 'webapphub'
 PLUGIN_NAME = 'WebApp Hub'
 PLUGIN_VERSION = '1.0.0'
-PLUGIN_REQUIRED = False
+PLUGIN_REQUIRED = True
 PLUGIN_DEFAULT_ENABLED = True
 PLUGIN_DEPENDS_OPTIONAL = ['devtools']
 

@@ -285,6 +285,33 @@ plugin_manager.initialize(
 )
 
 
+def ensure_default_webapphub():
+    launcher_path = os.path.join(current_dir, 'apps', 'webapphub', 'index.html')
+    if os.path.isfile(launcher_path):
+        try:
+            plugin_manager.set_plugin_enabled('webapphub', True)
+        except Exception:
+            pass
+        return
+
+    try:
+        plugin_manager.install_package('webapphub', update=False)
+    except Exception as install_error:
+        try:
+            plugin_manager.install_package('webapphub', update=True, force=True)
+        except Exception as update_error:
+            print(f'Failed to restore default WebApp Hub package: {install_error}; update fallback: {update_error}')
+            return
+
+    try:
+        plugin_manager.set_plugin_enabled('webapphub', True)
+    except Exception as enable_error:
+        print(f'Failed to enable default WebApp Hub plugin: {enable_error}')
+
+
+ensure_default_webapphub()
+
+
 def discover_start_menu_items():
     start_title_pattern = re.compile(
         r"\b(?:const|let|var)\s+start_(?:titel|title)\s*=\s*['\"]([^'\"]+)['\"]",
@@ -776,7 +803,8 @@ class MyRequestHandler(http.server.SimpleHTTPRequestHandler):
                 request_data = json.loads(post_data.decode('utf-8'))
 
                 package_id = str(request_data.get('packageId', '')).strip()
-                response = plugin_manager.install_package(package_id, update=True)
+                force = bool(request_data.get('force', False))
+                response = plugin_manager.install_package(package_id, update=True, force=force)
 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')

@@ -2,13 +2,65 @@ import importlib.util
 import json
 import os
 import shutil
+import tempfile
 import time
+import urllib.parse
+import urllib.request
+import zipfile
 
 
 _registry_cache = None
 _plugins_cache = None
 _paths = {}
 _runtime_context = {}
+
+_REMOTE_PACKAGES_REPO = 'lauraloldk/JS-OS-Desktop'
+_REMOTE_PACKAGES_BRANCH = 'main'
+_REMOTE_PACKAGES_ROOT = 'packages'
+_REMOTE_PACKAGES_TTL_SECONDS = 120
+
+_remote_packages_cache = None
+_remote_packages_cached_at = 0
+
+
+def _version_to_parts(version_value):
+    text = str(version_value or '').strip()
+    if not text:
+        return [0]
+
+    parts = []
+    for chunk in text.split('.'):
+        digits = []
+        for ch in str(chunk):
+            if ch.isdigit():
+                digits.append(ch)
+            else:
+                break
+        if digits:
+            parts.append(int(''.join(digits)))
+        else:
+            parts.append(0)
+
+    while len(parts) > 1 and parts[-1] == 0:
+        parts.pop()
+
+    return parts or [0]
+
+
+def _compare_versions(left, right):
+    left_parts = _version_to_parts(left)
+    right_parts = _version_to_parts(right)
+
+    max_len = max(len(left_parts), len(right_parts))
+    for index in range(max_len):
+        left_value = left_parts[index] if index < len(left_parts) else 0
+        right_value = right_parts[index] if index < len(right_parts) else 0
+        if left_value > right_value:
+            return 1
+        if left_value < right_value:
+            return -1
+
+    return 0
 
 
 def initialize(base_dir, files_root, runtime_context=None):
@@ -75,6 +127,43 @@ def _save_registry():
 
     with open(_paths['registry_file'], 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def _request_json(url, headers=None):
+    request = urllib.request.Request(
+        str(url),
+        headers={
+            'Accept': 'application/vnd.github+json',
+            'User-Agent': 'JS-OS-PackageManager',
+            **(headers or {})
+        }
+    )
+    with urllib.request.urlopen(request, timeout=25) as response:
+        body = response.read().decode('utf-8')
+    return json.loads(body)
+
+
+def _download_bytes(url, headers=None):
+    request = urllib.request.Request(
+        str(url),
+        headers={
+            'User-Agent': 'JS-OS-PackageManager',
+            **(headers or {})
+        }
+    )
+    with urllib.request.urlopen(request, timeout=45) as response:
+        return response.read()
+
+
+def _pick_archive_root(extract_dir):
+    entries = [
+        os.path.join(extract_dir, name)
+        for name in os.listdir(extract_dir)
+    ]
+    dirs = [path for path in entries if os.path.isdir(path)]
+    if len(dirs) == 1:
+        return dirs[0]
+    return extract_dir
 
 
 def _safe_rel_path(path_value):
@@ -358,14 +447,95 @@ def _read_package_manifest(package_id):
         'id': pkg_id,
         'name': name,
         'version': version,
-        'install': install
+        'install': install,
+        'packagePath': f'{_REMOTE_PACKAGES_ROOT}/{package_rel}',
+        'source': 'local'
     }
 
 
-def list_packages():
+def _fetch_remote_package_directories():
+    url = (
+        f'https://api.github.com/repos/{_REMOTE_PACKAGES_REPO}/contents/'
+        f'{urllib.parse.quote(_REMOTE_PACKAGES_ROOT)}?ref={urllib.parse.quote(_REMOTE_PACKAGES_BRANCH)}'
+    )
+    payload = _request_json(url)
+    if not isinstance(payload, list):
+        return []
+
+    directories = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get('type') or '') != 'dir':
+            continue
+
+        path_value = str(item.get('path') or '').replace('\\', '/').strip('/')
+        name = str(item.get('name') or '').strip()
+        if not path_value or not name:
+            continue
+
+        directories.append({
+            'name': name,
+            'path': path_value
+        })
+
+    return directories
+
+
+def _fetch_remote_manifest(directory_path):
+    rel_path = _safe_rel_path(directory_path)
+    manifest_url = (
+        f'https://raw.githubusercontent.com/{_REMOTE_PACKAGES_REPO}/'
+        f'{urllib.parse.quote(_REMOTE_PACKAGES_BRANCH)}/{rel_path}/manifest.json'
+    )
+    manifest = _request_json(manifest_url, headers={'Accept': 'application/json'})
+    if not isinstance(manifest, dict):
+        raise ValueError(f'Invalid remote manifest: {rel_path}/manifest.json')
+
+    pkg_id = str(manifest.get('id') or os.path.basename(rel_path))
+    version = str(manifest.get('version') or '0.0.0')
+    name = str(manifest.get('name') or pkg_id)
+    install = manifest.get('install')
+    if not isinstance(install, list) or not install:
+        raise ValueError(f'Remote manifest has invalid install array: {pkg_id}')
+
+    return {
+        'id': pkg_id,
+        'name': name,
+        'version': version,
+        'install': install,
+        'packagePath': rel_path,
+        'source': 'github'
+    }
+
+
+def _load_remote_packages(force=False):
+    global _remote_packages_cache
+    global _remote_packages_cached_at
+
+    now = int(time.time())
+    if not force and _remote_packages_cache is not None and (now - _remote_packages_cached_at) < _REMOTE_PACKAGES_TTL_SECONDS:
+        return list(_remote_packages_cache)
+
+    directories = _fetch_remote_package_directories()
+    manifests = []
+    for directory in directories:
+        path_value = directory.get('path')
+        if not path_value:
+            continue
+        try:
+            manifest = _fetch_remote_manifest(path_value)
+            manifests.append(manifest)
+        except Exception:
+            continue
+
+    _remote_packages_cache = manifests
+    _remote_packages_cached_at = now
+    return list(_remote_packages_cache)
+
+
+def _list_local_package_manifests():
     _ensure_initialized()
-    registry = _load_registry()
-    installed = registry.get('packages', {})
 
     results = []
     packages_dir = _paths['packages_dir']
@@ -379,18 +549,114 @@ def list_packages():
 
         try:
             _, manifest = _read_package_manifest(name)
+            results.append(manifest)
         except Exception:
             continue
 
-        state = installed.get(manifest['id'])
+    return results
+
+
+def _find_remote_package_by_id(package_id):
+    package_key = str(package_id or '').strip()
+    if not package_key:
+        raise ValueError('Package id is required')
+
+    for manifest in _load_remote_packages():
+        if str(manifest.get('id') or '') == package_key:
+            return manifest
+
+    return None
+
+
+def _with_remote_package_dir(package_path, callback):
+    package_rel = _safe_rel_path(package_path)
+    zip_url = f'https://api.github.com/repos/{_REMOTE_PACKAGES_REPO}/zipball/{urllib.parse.quote(_REMOTE_PACKAGES_BRANCH)}'
+    zip_bytes = _download_bytes(zip_url)
+
+    with tempfile.TemporaryDirectory(prefix='jsos_pkg_remote_') as temp_dir:
+        archive_path = os.path.join(temp_dir, 'repo.zip')
+        with open(archive_path, 'wb') as f:
+            f.write(zip_bytes)
+
+        extract_dir = os.path.join(temp_dir, 'extract')
+        os.makedirs(extract_dir, exist_ok=True)
+        with zipfile.ZipFile(archive_path, 'r') as zf:
+            zf.extractall(extract_dir)
+
+        repo_root = _pick_archive_root(extract_dir)
+        package_dir = _resolve_inside(repo_root, package_rel)
+        if not os.path.isdir(package_dir):
+            raise FileNotFoundError(f'Remote package path not found in archive: {package_rel}')
+
+        return callback(package_dir)
+
+
+def list_packages():
+    _ensure_initialized()
+    registry = _load_registry()
+    installed = registry.get('packages', {})
+
+    remote_manifests = []
+    try:
+        remote_manifests = _load_remote_packages()
+    except Exception:
+        remote_manifests = []
+
+    local_manifests = _list_local_package_manifests()
+
+    by_id = {}
+    for manifest in local_manifests:
+        by_id[str(manifest.get('id') or '')] = manifest
+
+    for manifest in remote_manifests:
+        by_id[str(manifest.get('id') or '')] = manifest
+
+    for installed_id, state in installed.items():
+        if installed_id in by_id:
+            continue
+        if not isinstance(state, dict):
+            continue
+        by_id[installed_id] = {
+            'id': installed_id,
+            'name': str(state.get('name') or installed_id),
+            'version': str(state.get('version') or '0.0.0'),
+            'source': str(state.get('source') or 'installed'),
+            'packagePath': str(state.get('packagePath') or '')
+        }
+
+    results = []
+    for package_id in sorted(by_id.keys(), key=lambda value: value.lower()):
+        if not package_id:
+            continue
+
+        manifest = by_id[package_id]
+        state = installed.get(package_id)
         installed_version = state.get('version') if isinstance(state, dict) else None
+        available_version = str(manifest.get('version') or '0.0.0')
+
+        if installed_version:
+            version_cmp = _compare_versions(available_version, str(installed_version))
+            update_available = version_cmp > 0
+            if version_cmp > 0:
+                version_state = 'newer'
+            elif version_cmp < 0:
+                version_state = 'older'
+            else:
+                version_state = 'same'
+        else:
+            update_available = False
+            version_state = 'not-installed'
 
         results.append({
-            'id': manifest['id'],
-            'name': manifest['name'],
-            'version': manifest['version'],
+            'id': package_id,
+            'name': str(manifest.get('name') or package_id),
+            'version': available_version,
             'installedVersion': installed_version,
-            'isInstalled': bool(installed_version)
+            'isInstalled': bool(installed_version),
+            'source': str(manifest.get('source') or 'unknown'),
+            'packagePath': str(manifest.get('packagePath') or ''),
+            'updateAvailable': bool(update_available),
+            'versionState': version_state
         })
 
     return results
@@ -419,6 +685,23 @@ def _find_package_by_id(package_id):
             return found_dir, manifest
 
     raise FileNotFoundError(f'Package not found: {package_key}')
+
+
+def _find_any_package_by_id(package_id):
+    package_key = str(package_id or '').strip()
+    if not package_key:
+        raise ValueError('Package id is required')
+
+    try:
+        remote_manifest = _find_remote_package_by_id(package_key)
+        if remote_manifest is not None:
+            return 'github', remote_manifest
+    except Exception:
+        # Keep local fallback available when GitHub is temporarily unavailable.
+        pass
+
+    _, local_manifest = _find_package_by_id(package_key)
+    return 'local', local_manifest
 
 
 def _copy_tree(src_dir, dest_dir):
@@ -464,9 +747,10 @@ def _install_manifest_files(package_dir, manifest):
         shutil.copy2(source, target)
 
 
-def install_package(package_id, update=False):
-    package_dir, manifest = _read_package_manifest(package_id)
+def install_package(package_id, update=False, force=False):
     registry = _load_registry()
+
+    source, manifest = _find_any_package_by_id(package_id)
 
     installed = registry.get('packages', {})
     existing = installed.get(manifest['id'])
@@ -478,10 +762,33 @@ def install_package(package_id, update=False):
     if update and not existing_version:
         raise ValueError(f'Package is not installed yet: {manifest["id"]}')
 
-    _install_manifest_files(package_dir, manifest)
+    if update and existing_version and not force:
+        version_cmp = _compare_versions(str(manifest.get('version') or '0.0.0'), str(existing_version))
+        if version_cmp <= 0:
+            raise ValueError(
+                f'No newer version available for {manifest["id"]}. '
+                f'Installed: {existing_version}, available: {manifest.get("version")}'
+            )
+
+    if source == 'github':
+        package_path = str(manifest.get('packagePath') or '')
+        if not package_path:
+            raise ValueError(f'Missing packagePath for remote package: {manifest["id"]}')
+
+        def install_from_remote(package_dir):
+            _install_manifest_files(package_dir, manifest)
+
+        _with_remote_package_dir(package_path, install_from_remote)
+    else:
+        package_dir, local_manifest = _read_package_manifest(os.path.basename(str(manifest.get('packagePath') or manifest['id'])))
+        _install_manifest_files(package_dir, local_manifest)
 
     installed[manifest['id']] = {
         'version': manifest['version'],
+        'name': manifest['name'],
+        'source': source,
+        'packagePath': str(manifest.get('packagePath') or ''),
+        'installManifest': list(manifest.get('install') or []),
         'updatedAt': int(time.time())
     }
     registry['packages'] = installed
@@ -498,13 +805,29 @@ def install_package(package_id, update=False):
 
 def uninstall_package(package_id):
     _ensure_initialized()
-
-    package_dir, manifest = _find_package_by_id(package_id)
     registry = _load_registry()
     installed = registry.get('packages', {})
-    package_state = installed.get(manifest['id'])
+
+    package_key = str(package_id or '').strip()
+    if not package_key:
+        raise ValueError('Package id is required')
+
+    package_state = installed.get(package_key)
     if not isinstance(package_state, dict) or not package_state.get('version'):
-        raise ValueError(f'Package is not installed: {manifest["id"]}')
+        raise ValueError(f'Package is not installed: {package_key}')
+
+    manifest = None
+    install_entries = package_state.get('installManifest')
+    if isinstance(install_entries, list) and install_entries:
+        manifest = {
+            'id': package_key,
+            'name': str(package_state.get('name') or package_key),
+            'version': str(package_state.get('version') or '0.0.0'),
+            'install': install_entries,
+            'source': str(package_state.get('source') or 'registry')
+        }
+    else:
+        _, manifest = _find_any_package_by_id(package_key)
 
     removed = []
     for item in manifest['install']:
@@ -525,14 +848,14 @@ def uninstall_package(package_id):
             os.remove(target)
             removed.append(str(dst_rel))
 
-    installed.pop(manifest['id'], None)
+    installed.pop(package_key, None)
     registry['packages'] = installed
     _save_registry()
 
     _reload_plugins()
 
     return {
-        'id': manifest['id'],
+        'id': package_key,
         'removed': removed
     }
 

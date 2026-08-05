@@ -11,6 +11,7 @@
             font-family: Segoe UI, sans-serif;
             background: linear-gradient(180deg, #f7fafc 0%, #e9f1f8 100%);
             color: #1d2f44;
+            overflow: hidden;
         }
 
         .layout {
@@ -20,6 +21,7 @@
             gap: 10px;
             padding: 12px;
             box-sizing: border-box;
+            min-height: 0;
         }
 
         .bar {
@@ -29,35 +31,29 @@
             align-items: center;
         }
 
-        input, select, textarea, button {
+        button {
             border: 1px solid #c6d6e8;
             border-radius: 8px;
             padding: 8px 10px;
             font: inherit;
             box-sizing: border-box;
-        }
-
-        input[type="text"] {
-            min-width: 260px;
-            background: #fff;
+            cursor: pointer;
         }
 
         button.primary {
             background: #2f78c5;
             border-color: #2f78c5;
             color: #fff;
-            cursor: pointer;
         }
 
         button.secondary {
             background: #fff;
             color: #2e4f74;
-            cursor: pointer;
         }
 
         .panes {
             display: grid;
-            grid-template-columns: 1.2fr 1fr;
+            grid-template-columns: 1fr 1fr;
             gap: 10px;
             min-height: 0;
         }
@@ -69,6 +65,7 @@
             display: grid;
             grid-template-rows: auto 1fr;
             overflow: hidden;
+            min-height: 0;
         }
 
         .panel-header {
@@ -76,6 +73,9 @@
             border-bottom: 1px solid #e2e9f2;
             font-weight: 700;
             background: #f5f9fd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .panel-body {
@@ -84,6 +84,7 @@
             display: grid;
             gap: 8px;
             align-content: start;
+            min-height: 0;
         }
 
         .card {
@@ -98,10 +99,6 @@
         .meta {
             font-size: 12px;
             color: #5a738d;
-        }
-
-        .desc {
-            font-size: 13px;
         }
 
         .row {
@@ -122,18 +119,6 @@
             max-width: min(520px, calc(100vw - 24px));
         }
 
-        .rating {
-            border-top: 1px dashed #d8e2ee;
-            padding-top: 8px;
-            display: grid;
-            gap: 6px;
-        }
-
-        textarea {
-            min-height: 64px;
-            width: 100%;
-        }
-
         @media (max-width: 1000px) {
             .panes {
                 grid-template-columns: 1fr;
@@ -144,24 +129,27 @@
 <body>
     <div class="layout">
         <div class="bar">
-            <input id="searchInput" type="text" placeholder="Search GitHub webapps (name/description/readme)">
-            <button id="searchButton" class="primary">Search API</button>
-            <button id="loadInstalledButton" class="secondary">Refresh Installed</button>
-            <span id="searchMeta" class="meta"></span>
+            <button id="refreshButton" class="primary">Refresh Packages</button>
+            <button id="refreshInstalledButton" class="secondary">Refresh Installed</button>
+            <span id="sourceMeta" class="meta">Primary package source: github.com/lauraloldk/JS-OS-Desktop/tree/main/packages</span>
         </div>
 
         <div class="bar">
-            <span class="meta">Installs create local launchers in apps/webapps/...</span>
+            <span class="meta">Install/update reads each package manifest.json and applies its install mapping.</span>
         </div>
 
         <div class="panes">
             <div class="panel">
-                <div class="panel-header">API Results</div>
-                <div id="results" class="panel-body"></div>
+                <div class="panel-header">
+                    <span>Available Packages</span>
+                </div>
+                <div id="packagesList" class="panel-body"></div>
             </div>
             <div class="panel">
-                <div class="panel-header">Installed WebApps + Ratings</div>
-                <div id="installed" class="panel-body"></div>
+                <div class="panel-header">
+                    <span>Installed Packages</span>
+                </div>
+                <div id="installedList" class="panel-body"></div>
             </div>
         </div>
     </div>
@@ -169,7 +157,12 @@
     <div id="status" class="status"></div>
 
     <script>
-        const EXECUTE_ENDPOINT = '../../plugins/execute';
+        const PACKAGES_ENDPOINT = '../../plugins/packages';
+        const INSTALL_ENDPOINT = '../../plugins/install';
+        const UPDATE_ENDPOINT = '../../plugins/update';
+        const UNINSTALL_ENDPOINT = '../../plugins/uninstall';
+
+        let currentPackages = [];
 
         function showStatus(message) {
             const node = document.getElementById('status');
@@ -181,11 +174,11 @@
             }, 3200);
         }
 
-        async function pluginAction(actionId, payload) {
-            const response = await fetch(EXECUTE_ENDPOINT, {
+        async function postAction(url, payload) {
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ actionId: actionId, payload: payload || {} })
+                body: JSON.stringify(payload || {})
             });
 
             const data = await response.json();
@@ -195,209 +188,174 @@
             return data;
         }
 
-        function createRepoCard(item) {
+        async function getPackages() {
+            const response = await fetch(PACKAGES_ENDPOINT, { cache: 'no-store' });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || payload.message || `Failed to load packages (${response.status})`);
+            }
+            return Array.isArray(payload.packages) ? payload.packages : [];
+        }
+
+        function createAvailablePackageCard(pkg) {
             const card = document.createElement('div');
             card.className = 'card';
 
             const title = document.createElement('strong');
-            title.textContent = item.fullName || item.name || 'Unknown repo';
+            title.textContent = `${pkg.name || pkg.id} (${pkg.id})`;
 
             const meta = document.createElement('div');
             meta.className = 'meta';
-            meta.textContent = `Owner: ${item.owner || 'unknown'} | Stars: ${item.stars || 0}`;
-
-            const desc = document.createElement('div');
-            desc.className = 'desc';
-            desc.textContent = item.description || 'No description';
+            meta.textContent = `Available ${pkg.version || '0.0.0'} | Source: ${pkg.source || 'unknown'}`;
 
             const row = document.createElement('div');
             row.className = 'row';
 
             const install = document.createElement('button');
             install.className = 'primary';
-            install.textContent = 'Install as App';
+            install.textContent = pkg.isInstalled ? 'Already Installed' : 'Install';
+            install.disabled = !!pkg.isInstalled;
             install.addEventListener('click', async () => {
                 try {
-                    const customTitle = prompt('Launcher title (optional)', item.name || '') || '';
-                    const htmlPath = prompt('HTML path inside repo (optional)', '');
-                    const result = await pluginAction('webapphub.install', {
-                        fullName: item.fullName,
-                        branch: item.defaultBranch || 'main',
-                        title: customTitle,
-                        htmlPath: htmlPath || ''
-                    });
-                    showStatus(result.message || 'Installed');
-                    await loadInstalled();
+                    await postAction(INSTALL_ENDPOINT, { packageId: pkg.id });
+                    showStatus(`${pkg.id} installed`);
+                    await refreshAll();
                 } catch (error) {
                     alert(error.message);
                 }
             });
 
-            const openGithub = document.createElement('button');
-            openGithub.className = 'secondary';
-            openGithub.textContent = 'Open GitHub';
-            openGithub.addEventListener('click', () => {
-                if (item.url) {
-                    window.open(item.url, '_blank', 'noopener');
-                }
-            });
-
             row.appendChild(install);
-            row.appendChild(openGithub);
 
             card.appendChild(title);
             card.appendChild(meta);
-            card.appendChild(desc);
             card.appendChild(row);
             return card;
         }
 
-        function createInstalledCard(item, canRate, allowedRatings) {
+        function createInstalledPackageCard(pkg) {
             const card = document.createElement('div');
             card.className = 'card';
 
             const title = document.createElement('strong');
-            title.textContent = item.title || item.fullName || item.slug;
+            title.textContent = `${pkg.name || pkg.id} (${pkg.id})`;
 
             const meta = document.createElement('div');
             meta.className = 'meta';
-            meta.textContent = `${item.fullName || ''} | ${item.appUrl || ''}`;
+            meta.textContent = `Installed ${pkg.installedVersion || 'unknown'} | Available ${pkg.version || 'unknown'} | Source: ${pkg.source || 'unknown'}`;
+
+            const versionNote = document.createElement('div');
+            versionNote.className = 'meta';
+            if (pkg.versionState === 'newer') {
+                versionNote.textContent = 'Update available';
+            } else if (pkg.versionState === 'same') {
+                versionNote.textContent = 'Up to date';
+            } else if (pkg.versionState === 'older') {
+                versionNote.textContent = 'Installed version is newer than source';
+            } else {
+                versionNote.textContent = '';
+            }
 
             const row = document.createElement('div');
             row.className = 'row';
 
-            const openButton = document.createElement('button');
-            openButton.className = 'primary';
-            openButton.textContent = 'Open App';
-            openButton.addEventListener('click', () => {
-                if (window.parent && typeof window.parent.createWindow === 'function') {
-                    window.parent.createWindow(item.title || item.slug || 'WebApp', item.appUrl);
+            const update = document.createElement('button');
+            update.className = 'secondary';
+            update.textContent = pkg.updateAvailable ? 'Update' : 'Up to date';
+            update.disabled = !pkg.updateAvailable;
+            update.addEventListener('click', async () => {
+                try {
+                    await postAction(UPDATE_ENDPOINT, { packageId: pkg.id });
+                    showStatus(`${pkg.id} updated`);
+                    await refreshAll();
+                } catch (error) {
+                    alert(error.message);
                 }
             });
-            row.appendChild(openButton);
+
+            const uninstall = document.createElement('button');
+            uninstall.className = 'secondary';
+            uninstall.textContent = 'Uninstall';
+            uninstall.addEventListener('click', async () => {
+                const ok = confirm(`Uninstall package ${pkg.id}?`);
+                if (!ok) {
+                    return;
+                }
+
+                try {
+                    await postAction(UNINSTALL_ENDPOINT, { packageId: pkg.id });
+                    showStatus(`${pkg.id} uninstalled`);
+                    await refreshAll();
+                } catch (error) {
+                    alert(error.message);
+                }
+            });
+
+            row.appendChild(update);
+            row.appendChild(uninstall);
 
             card.appendChild(title);
             card.appendChild(meta);
-            card.appendChild(row);
-
-            const rating = document.createElement('div');
-            rating.className = 'rating';
-
-            const ratingMeta = document.createElement('div');
-            ratingMeta.className = 'meta';
-            const currentStatus = item.rating && item.rating.status ? item.rating.status : 'no rating';
-            ratingMeta.textContent = `Current rating: ${currentStatus}`;
-            rating.appendChild(ratingMeta);
-
-            if (!canRate) {
-                const info = document.createElement('div');
-                info.className = 'meta';
-                info.textContent = 'Enable devtools plugin to submit ratings.';
-                rating.appendChild(info);
-            } else {
-                const select = document.createElement('select');
-                (allowedRatings || []).forEach((status) => {
-                    const option = document.createElement('option');
-                    option.value = status;
-                    option.textContent = status;
-                    select.appendChild(option);
-                });
-                if (item.rating && item.rating.status) {
-                    select.value = item.rating.status;
-                }
-
-                const note = document.createElement('textarea');
-                note.placeholder = 'Optional note about compatibility';
-                note.value = item.rating && item.rating.note ? item.rating.note : '';
-
-                const save = document.createElement('button');
-                save.className = 'secondary';
-                save.textContent = 'Save Rating';
-                save.addEventListener('click', async () => {
-                    try {
-                        const result = await pluginAction('webapphub.rate', {
-                            fullName: item.fullName,
-                            status: select.value,
-                            note: note.value
-                        });
-                        showStatus(result.message || 'Rating saved');
-                        await loadInstalled();
-                    } catch (error) {
-                        alert(error.message);
-                    }
-                });
-
-                rating.appendChild(select);
-                rating.appendChild(note);
-                rating.appendChild(save);
+            if (versionNote.textContent) {
+                card.appendChild(versionNote);
             }
-
-            card.appendChild(rating);
+            card.appendChild(row);
             return card;
         }
 
-        async function search() {
-            const input = document.getElementById('searchInput');
-            const query = String(input.value || '').trim();
-            const payload = await pluginAction('webapphub.search', { query: query, page: 1 });
+        function renderPackages() {
+            const node = document.getElementById('packagesList');
+            node.innerHTML = '';
 
-            const resultsNode = document.getElementById('results');
-            resultsNode.innerHTML = '';
-
-            const items = Array.isArray(payload.items) ? payload.items : [];
-            if (!items.length) {
+            if (!currentPackages.length) {
                 const empty = document.createElement('div');
                 empty.className = 'meta';
-                empty.textContent = 'No API results found.';
-                resultsNode.appendChild(empty);
-            } else {
-                items.forEach((item) => {
-                    resultsNode.appendChild(createRepoCard(item));
-                });
-            }
-
-            const total = Number(payload.totalCount || 0);
-            document.getElementById('searchMeta').textContent = `${total} API results`; 
-        }
-
-        async function loadInstalled() {
-            const payload = await pluginAction('webapphub.list', {});
-            const installedNode = document.getElementById('installed');
-            installedNode.innerHTML = '';
-
-            const apps = Array.isArray(payload.apps) ? payload.apps : [];
-            if (!apps.length) {
-                const empty = document.createElement('div');
-                empty.className = 'meta';
-                empty.textContent = 'No installed webapps yet.';
-                installedNode.appendChild(empty);
+                empty.textContent = 'No packages available from source.';
+                node.appendChild(empty);
                 return;
             }
 
-            apps.forEach((item) => {
-                installedNode.appendChild(
-                    createInstalledCard(item, !!payload.canRate, payload.allowedRatings || [])
-                );
+            currentPackages.forEach((pkg) => {
+                node.appendChild(createAvailablePackageCard(pkg));
             });
         }
 
+        function renderInstalled() {
+            const node = document.getElementById('installedList');
+            node.innerHTML = '';
+
+            const installed = currentPackages.filter((pkg) => !!pkg.isInstalled);
+            if (!installed.length) {
+                const empty = document.createElement('div');
+                empty.className = 'meta';
+                empty.textContent = 'No installed packages.';
+                node.appendChild(empty);
+                return;
+            }
+
+            installed.forEach((pkg) => {
+                node.appendChild(createInstalledPackageCard(pkg));
+            });
+        }
+
+        async function refreshAll() {
+            currentPackages = await getPackages();
+            renderPackages();
+            renderInstalled();
+        }
+
         function bind() {
-            document.getElementById('searchButton').addEventListener('click', () => {
-                search().catch((error) => alert(error.message));
+            document.getElementById('refreshButton').addEventListener('click', () => {
+                refreshAll().catch((error) => alert(error.message));
             });
-            document.getElementById('loadInstalledButton').addEventListener('click', () => {
-                loadInstalled().catch((error) => alert(error.message));
-            });
-            document.getElementById('searchInput').addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') {
-                    search().catch((error) => alert(error.message));
-                }
+            document.getElementById('refreshInstalledButton').addEventListener('click', () => {
+                refreshAll().catch((error) => alert(error.message));
             });
         }
 
         async function init() {
             bind();
-            await Promise.all([search(), loadInstalled()]);
+            await refreshAll();
         }
 
         init().catch((error) => alert(error.message));
